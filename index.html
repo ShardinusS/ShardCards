@@ -1,0 +1,126 @@
+ <!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FlashCards">
+    <meta name="theme-color" content="#2196F3">
+    <title>FlashCards - AnkiApp Style</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+    <!-- Écran principal - Liste des decks -->
+    <div id="decks-view" class="view active">
+        <header>
+            <h1>Mes Decks</h1>
+            <div class="header-actions">
+                <button id="hamburger-menu-btn" class="icon-btn" aria-label="Menu" title="Menu">
+                    ☰
+                </button>
+            </div>
+        </header>
+        
+        <div id="decks-container" class="decks-grid">
+            <!-- Les decks seront ajoutés dynamiquement ici -->
+        </div>
+        
+        <div class="fab-container">
+            <button id="add-deck-btn" class="fab" aria-label="Ajouter un deck">
+                <span>+</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Écran détail d'un deck -->
+    <div id="deck-detail-view" class="view">
+        <header>
+            <button id="back-btn" class="icon-btn" aria-label="Retour">
+                ←
+            </button>
+            <h1 id="deck-title">Deck</h1>
+            <div class="header-actions">
+                <button id="hamburger-menu-btn-detail" class="icon-btn" aria-label="Menu" title="Menu">
+                    ☰
+                </button>
+            </div>
+        </header>
+        
+        <div id="cards-container" class="cards-list">
+            <!-- Les cartes seront ajoutées dynamiquement ici -->
+        </div>
+        
+        <div class="fab-container">
+            <button id="add-card-btn" class="fab" aria-label="Ajouter une carte">
+                <span>+</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Écran révision -->
+    <div id="review-view" class="view">
+        <header>
+            <button id="review-back-btn" class="icon-btn" aria-label="Retour">
+                ←
+            </button>
+            <h1>Révision</h1>
+            <div id="review-progress">0 / 0</div>
+        </header>
+        
+        <div id="review-card" class="review-card">
+            <div id="card-front" class="card-side">
+                <p id="front-text"></p>
+            </div>
+            <div id="card-back" class="card-side hidden">
+                <p id="back-text"></p>
+            </div>
+            <div id="reveal-hint" class="reveal-hint">Tapez pour révéler</div>
+        </div>
+        
+        <div id="review-buttons" class="review-buttons hidden">
+            <button id="again-btn" class="review-btn again">Encore</button>
+            <button id="good-btn" class="review-btn good">Bien</button>
+            <button id="easy-btn" class="review-btn easy">Facile</button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">Titre</h2>
+                <button class="modal-close" aria-label="Fermer">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input file caché pour import -->
+    <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+    <!-- Menu hamburger -->
+    <div id="hamburger-menu" class="hamburger-menu hidden">
+        <div class="hamburger-menu-overlay"></div>
+        <div class="hamburger-menu-content">
+            <div class="hamburger-menu-header">
+                <h2>Menu</h2>
+                <button id="hamburger-close-btn" class="icon-btn" aria-label="Fermer">×</button>
+            </div>
+            <div class="hamburger-menu-items" id="hamburger-menu-items">
+                <!-- Les éléments du menu seront ajoutés dynamiquement -->
+            </div>
+            <div class="hamburger-menu-footer">
+                <div class="copyright">© 2024 Kenzo - Tous droits réservés</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
