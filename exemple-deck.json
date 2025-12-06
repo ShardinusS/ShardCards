@@ -1,0 +1,26 @@
+{
+  "name": "Vocabulaire Anglais - Exemple",
+  "cards": [
+    {
+      "front": "Bonjour",
+      "back": "Hello"
+    },
+    {
+      "front": "Au revoir",
+      "back": "Goodbye"
+    },
+    {
+      "front": "Merci",
+      "back": "Thank you"
+    },
+    {
+      "front": "S'il vous plaît",
+      "back": "Please"
+    },
+    {
+      "front": "Excusez-moi",
+      "back": "Excuse me"
+    }
+  ]
+}
+
