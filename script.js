@@ -23,7 +23,10 @@ const Icons = {
             arrowRight: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`,
             close: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
             list: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`,
-            grid: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`
+            grid: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`,
+            clock: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
+            bell: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`,
+            arrowDown: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
         };
         return icons[name] || '';
     }
@@ -252,25 +255,18 @@ const App = {
         
         // Afficher le popup d'aide lors de la première visite
         this.checkFirstVisit();
+        
+        // Écouter les messages du service worker pour les notifications
+        this.setupServiceWorkerMessageListener();
     },
     
     // Restaurer les rappels de révision au chargement
     restoreReviewReminders() {
-        const savedConfig = localStorage.getItem('flashcards_reminder_config');
-        if (savedConfig) {
-            const config = JSON.parse(savedConfig);
-            if (config.enabled && this.serviceWorkerRegistration && this.serviceWorkerRegistration.active) {
-                // Attendre que le service worker soit prêt
-                setTimeout(() => {
-                    if (this.serviceWorkerRegistration.active) {
-                        this.serviceWorkerRegistration.active.postMessage({
-                            type: 'SCHEDULE_REVIEW_REMINDER',
-                            time: config.time,
-                            frequency: config.frequency
-                        });
-                    }
-                }, 1000);
-            }
+        // Les rappels sont maintenant stockés dans IndexedDB du service worker
+        // Ils seront automatiquement restaurés par le service worker
+        // On vérifie juste que le service worker est actif
+        if (this.serviceWorkerRegistration) {
+            // Le service worker vérifiera automatiquement les notifications au démarrage
         }
     },
     
@@ -281,6 +277,9 @@ const App = {
         });
         document.querySelectorAll('.icon-arrow-left').forEach(el => {
             el.innerHTML = Icons.getIcon('arrowLeft', 20, 'white');
+        });
+        document.querySelectorAll('.icon-bell').forEach(el => {
+            el.innerHTML = Icons.getIcon('bell', 24, 'white');
         });
         document.querySelectorAll('.icon-close').forEach(el => {
             const isWhite = el.closest('.icon-btn') || el.closest('.hamburger-menu-header');
@@ -348,7 +347,11 @@ const App = {
         this.renderDecks();
     },
     
-    showDeckDetailView() {
+    showDeckDetailView(deckId = null) {
+        // Si un deckId est fourni, l'utiliser, sinon utiliser le currentDeckId
+        if (deckId) {
+            this.currentDeckId = deckId;
+        }
         if (!this.currentDeckId) return;
         this.showView('deck-detail');
         this.renderCards();
@@ -373,10 +376,10 @@ const App = {
         // Attendre que la vue soit complètement affichée avant de rendre la carte
         // Utiliser requestAnimationFrame pour s'assurer que le DOM est prêt
         requestAnimationFrame(() => {
-            setTimeout(() => {
+        setTimeout(() => {
                 // Vérifier à nouveau que les cartes sont toujours disponibles
                 if (this.reviewCards && this.reviewCards.length > 0) {
-                    this.renderReviewCard();
+            this.renderReviewCard();
                 } else {
                     console.error('Les cartes de révision ont été perdues');
                     // Retourner à la vue du deck si les cartes ne sont plus disponibles
@@ -564,25 +567,53 @@ const App = {
             const cardColor = ColorZones.getCardColor(cardScore);
             const zoneName = ColorZones.getZoneName(cardScore);
             
+            // Construire le contenu de la question
+            let frontHtml = '';
+            const hasFrontImage = card.frontImage && (typeof card.frontImage === 'string') && card.frontImage.trim() !== '';
+            const hasFrontText = card.front && (typeof card.front === 'string') && card.front.trim() !== '';
+            
+            if (hasFrontImage) {
+                frontHtml += `<div class="card-list-image-container"><img src="${card.frontImage}" alt="Question" class="card-list-image"></div>`;
+            }
+            if (hasFrontText) {
+                frontHtml += `<p class="card-list-text">${this.escapeHtml(card.front)}</p>`;
+            }
+            if (!frontHtml) {
+                frontHtml = '<p class="card-list-text" style="color: var(--text-secondary);">Aucun contenu pour la question</p>';
+            }
+            
+            // Construire le contenu de la réponse
+            let backHtml = '';
+            const hasBackImage = card.backImage && (typeof card.backImage === 'string') && card.backImage.trim() !== '';
+            const hasBackText = card.back && (typeof card.back === 'string') && card.back.trim() !== '';
+            
+            if (hasBackImage) {
+                backHtml += `<div class="card-list-image-container"><img src="${card.backImage}" alt="Réponse" class="card-list-image"></div>`;
+            }
+            if (hasBackText) {
+                backHtml += `<p class="card-list-text">${this.escapeHtml(card.back)}</p>`;
+            }
+            if (!backHtml) {
+                backHtml = '<p class="card-list-text" style="color: var(--text-secondary);">Aucun contenu pour la réponse</p>';
+            }
+            
             return `
                 <div class="card-item">
-                    <div class="card-color-band" style="background-color: ${cardColor};"></div>
+                    <div class="card-color-band-top" style="background-color: ${cardColor};"></div>
                     <div class="card-item-header">
                         <strong>Carte ${index + 1}</strong>
-                        <span style="font-size: 11px; color: ${cardColor}; font-weight: 600; margin-left: 10px;">
+                        <span style="font-size: 11px; color: ${cardColor}; font-weight: 600;">
                             ${zoneName}
                         </span>
                     </div>
-                    <div class="card-item-content">
-                        <div class="card-side-content">
-                            <strong>Question:</strong>
-                            ${card.frontImage ? `<div class="card-image-container" data-card-index="${index}" data-side="front"><img src="${card.frontImage}" alt="Question" class="card-image"></div>` : ''}
-                            ${card.front ? `<div class="card-text" data-card-index="${index}" data-side="front">${this.escapeHtml(card.front)}</div>` : ''}
+                    <div class="card-item-review-style">
+                        <div class="card-item-side">
+                            <div class="card-item-side-label">Question</div>
+                            <div class="card-item-side-content">${frontHtml}</div>
                         </div>
-                        <div class="card-side-content" style="margin-top: 10px;">
-                            <strong>Réponse:</strong>
-                            ${card.backImage ? `<div class="card-image-container" data-card-index="${index}" data-side="back"><img src="${card.backImage}" alt="Réponse" class="card-image"></div>` : ''}
-                            ${card.back ? `<div class="card-text" data-card-index="${index}" data-side="back">${this.escapeHtml(card.back)}</div>` : ''}
+                        <div class="card-item-side">
+                            <div class="card-item-side-label">Réponse</div>
+                            <div class="card-item-side-content">${backHtml}</div>
                         </div>
                     </div>
                     <div class="card-item-actions">
@@ -593,17 +624,8 @@ const App = {
             `;
         }).join('');
         
-        // Appliquer la taille de texte proportionnelle aux images dans la liste
-        setTimeout(() => {
-            container.querySelectorAll('.card-image-container').forEach(imageContainer => {
-                const side = imageContainer.dataset.side;
-                const cardIndex = imageContainer.dataset.cardIndex;
-                const textElement = container.querySelector(`.card-text[data-side="${side}"][data-card-index="${cardIndex}"]`);
-                if (textElement) {
-                    this.applyProportionalTextSize(imageContainer, textElement);
-                }
-            });
-        }, 100);
+        // Pas besoin d'appliquer la taille proportionnelle dans la liste
+        // La question et la réponse ont la même taille pour faciliter la lecture
     },
     
     // ============================================
@@ -1615,11 +1637,26 @@ const App = {
                 return;
             }
             
-            window.addEventListener('load', () => {
+            // Essayer d'enregistrer immédiatement si le DOM est prêt
+            const registerSW = () => {
                 navigator.serviceWorker.register('./service-worker.js')
                     .then(reg => {
                         console.log('Service Worker enregistré');
                         this.serviceWorkerRegistration = reg;
+                        
+                        // Vérifier si le service worker est déjà actif
+                        if (reg.active) {
+                            console.log('Service Worker déjà actif');
+                        } else if (reg.installing) {
+                            console.log('Service Worker en cours d\'installation');
+                            reg.installing.addEventListener('statechange', () => {
+                                if (reg.installing.state === 'activated') {
+                                    console.log('Service Worker activé');
+                                }
+                            });
+                        } else if (reg.waiting) {
+                            console.log('Service Worker en attente');
+                        }
                         
                         // Demander la permission pour les notifications après l'installation
                         this.requestNotificationPermission();
@@ -1630,7 +1667,15 @@ const App = {
                             console.log('Erreur Service Worker:', err);
                         }
                     });
-            });
+            };
+            
+            // Essayer d'enregistrer immédiatement si le document est prêt
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                registerSW();
+            } else {
+                // Sinon, attendre le chargement
+                window.addEventListener('load', registerSW);
+            }
         }
     },
     
@@ -1657,6 +1702,26 @@ const App = {
         // On ne demande pas automatiquement, on laisse l'utilisateur le faire via le menu
     },
     
+    // Attendre que le service worker soit enregistré
+    async waitForServiceWorker(maxWait = 5000) {
+        if (this.serviceWorkerRegistration) {
+            return true;
+        }
+        
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            const checkInterval = setInterval(() => {
+                if (this.serviceWorkerRegistration) {
+                    clearInterval(checkInterval);
+                    resolve(true);
+                } else if (Date.now() - startTime > maxWait) {
+                    clearInterval(checkInterval);
+                    resolve(false);
+                }
+            }, 100);
+        });
+    },
+    
     // Demander explicitement la permission et configurer les notifications
     async enableNotifications() {
         if (!('Notification' in window)) {
@@ -1664,8 +1729,10 @@ const App = {
             return false;
         }
         
-        if (!this.serviceWorkerRegistration) {
-            alert('Le service worker n\'est pas encore enregistré. Veuillez attendre quelques instants.');
+        // Attendre que le service worker soit enregistré
+        const isReady = await this.waitForServiceWorker();
+        if (!isReady) {
+            alert('Le service worker n\'a pas pu être enregistré. Veuillez rafraîchir la page.');
             return false;
         }
         
@@ -1680,87 +1747,421 @@ const App = {
         }
     },
     
-    // Configurer les rappels de révision
+    // Configurer les rappels de révision par deck
     configureReviewReminders() {
-        // Charger la configuration existante
-        const savedConfig = localStorage.getItem('flashcards_reminder_config');
-        const config = savedConfig ? JSON.parse(savedConfig) : { enabled: false, time: '09:00', frequency: 'daily' };
+        const decks = Storage.getDecks();
         
-        const content = `
-            <div style="line-height: 1.8;">
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="reminder-enabled" ${config.enabled ? 'checked' : ''} style="width: auto;">
-                        <span>Activer les rappels de révision</span>
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label for="reminder-time">Heure de rappel</label>
-                    <input type="time" id="reminder-time" value="${config.time || '09:00'}" required>
-                </div>
-                <div class="form-group">
-                    <label for="reminder-frequency">Fréquence</label>
-                    <select id="reminder-frequency" required>
-                        <option value="once" ${config.frequency === 'once' ? 'selected' : ''}>Une seule fois</option>
-                        <option value="daily" ${config.frequency === 'daily' ? 'selected' : ''}>Quotidien</option>
-                        <option value="hourly" ${config.frequency === 'hourly' ? 'selected' : ''}>Toutes les heures</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="App.hideModal()">Annuler</button>
-                    <button type="button" class="btn btn-primary" id="save-reminder-btn">Enregistrer</button>
-                </div>
-            </div>
-        `;
-        
-        this.showModal('Rappels de révision', content);
-        
-        setTimeout(async () => {
-            const saveBtn = document.getElementById('save-reminder-btn');
-            const enabledCheckbox = document.getElementById('reminder-enabled');
+        // Charger les rappels existants
+        this.loadActiveReminders().then(reminders => {
+            const remindersMap = {};
+            reminders.forEach(r => {
+                remindersMap[r.deckId] = r;
+            });
             
-            if (saveBtn) {
-                saveBtn.addEventListener('click', async () => {
-                    const enabled = enabledCheckbox.checked;
-                    const time = document.getElementById('reminder-time').value;
-                    const frequency = document.getElementById('reminder-frequency').value;
-                    
-                    if (enabled) {
+            const content = `
+                <div style="line-height: 1.8;">
+                    <div class="form-group">
+                        <label for="reminder-deck" class="form-label-custom">
+                            <span class="label-icon">${Icons.getIcon('books', 18, 'var(--primary-color)')}</span>
+                            <span>Deck</span>
+                        </label>
+                        <div class="custom-select-wrapper">
+                            <select id="reminder-deck" class="custom-select" required>
+                                <option value="">-- Sélectionner un deck --</option>
+                                ${decks.map(deck => `
+                                    <option value="${deck.id}" data-name="${this.escapeHtml(deck.name)}">${this.escapeHtml(deck.name)}</option>
+                                `).join('')}
+                            </select>
+                            <span class="custom-select-arrow">${Icons.getIcon('arrowDown', 12, 'var(--text-secondary)')}</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="reminder-interval" class="form-label-custom">
+                            <span class="label-icon">${Icons.getIcon('clock', 18, 'var(--primary-color)')}</span>
+                            <span>Intervalle entre les notifications</span>
+                        </label>
+                        <div class="custom-select-wrapper">
+                            <select id="reminder-interval" class="custom-select" required>
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60" selected>1 heure</option>
+                                <option value="120">2 heures</option>
+                                <option value="180">3 heures</option>
+                                <option value="240">4 heures</option>
+                                <option value="360">6 heures</option>
+                                <option value="480">8 heures</option>
+                                <option value="720">12 heures</option>
+                                <option value="1440">24 heures (1 jour)</option>
+                            </select>
+                            <span class="custom-select-arrow">${Icons.getIcon('arrowDown', 12, 'var(--text-secondary)')}</span>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top: 25px;">
+                        <button type="button" class="btn btn-primary btn-add-reminder" id="add-reminder-btn">
+                            <span class="btn-icon">+</span>
+                            <span>Ajouter un rappel</span>
+                        </button>
+                    </div>
+                    <div class="reminders-section">
+                        <div class="reminders-section-header">
+                            <h4 class="reminders-title">
+                                <span class="title-icon">${Icons.getIcon('bell', 20, 'var(--primary-color)')}</span>
+                                Rappels actifs
+                            </h4>
+                        </div>
+                        <div id="active-reminders-list" class="reminders-list">
+                            ${this.renderActiveRemindersList(reminders, decks)}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            this.showModal('Rappels de révision par deck', content);
+            
+            setTimeout(async () => {
+                const addBtn = document.getElementById('add-reminder-btn');
+                const deckSelect = document.getElementById('reminder-deck');
+                const intervalSelect = document.getElementById('reminder-interval');
+                
+                if (addBtn) {
+                    addBtn.addEventListener('click', async () => {
+                        const deckId = deckSelect.value;
+                        const intervalMinutes = parseInt(intervalSelect.value);
+                        
+                        if (!deckId) {
+                            alert('Veuillez sélectionner un deck');
+                            return;
+                        }
+                        
+                        // Vérifier si un rappel existe déjà pour ce deck
+                        const existingReminder = reminders.find(r => r.deckId === deckId);
+                        if (existingReminder) {
+                            if (!confirm('Un rappel existe déjà pour ce deck. Voulez-vous le remplacer ?')) {
+                                return;
+                            }
+                        }
+                        
                         // Demander la permission si nécessaire
                         const hasPermission = await this.enableNotifications();
                         if (!hasPermission) {
                             return;
                         }
                         
-                        // Envoyer la configuration au service worker
+                        const deck = Storage.getDeck(deckId);
+                        const deckName = deck ? deck.name : deckSelect.options[deckSelect.selectedIndex].dataset.name;
+                        
+                        // Envoyer au service worker
                         if (this.serviceWorkerRegistration && this.serviceWorkerRegistration.active) {
                             this.serviceWorkerRegistration.active.postMessage({
-                                type: 'SCHEDULE_REVIEW_REMINDER',
-                                time: time,
-                                frequency: frequency
+                                type: 'ADD_REMINDER',
+                                deckId: deckId,
+                                deckName: deckName,
+                                intervalMinutes: intervalMinutes
                             });
                         }
-                    } else {
-                        // Annuler les rappels
-                        if (this.serviceWorkerRegistration && this.serviceWorkerRegistration.active) {
-                            this.serviceWorkerRegistration.active.postMessage({
-                                type: 'CANCEL_REMINDERS'
+                        
+                        // Recharger la liste
+                        setTimeout(() => {
+                            this.loadActiveReminders().then(newReminders => {
+                                const listContainer = document.getElementById('active-reminders-list');
+                                if (listContainer) {
+                                    listContainer.innerHTML = this.renderActiveRemindersList(newReminders, decks);
+                                    // Réattacher les événements de suppression
+                                    this.attachRemoveReminderListeners(newReminders);
+                                }
                             });
-                        }
+                        }, 100);
+                        
+                        alert(`Rappel configuré pour "${deckName}" toutes les ${intervalMinutes} minutes`);
+                    });
+                }
+                
+                // Attacher les événements de suppression
+                this.attachRemoveReminderListeners(reminders);
+            }, 10);
+        });
+    },
+    
+    // Charger les rappels actifs depuis le service worker
+    async loadActiveReminders() {
+        // Attendre que le service worker soit enregistré
+        const isReady = await this.waitForServiceWorker();
+        if (!isReady) {
+            return Promise.resolve([]);
+        }
+        
+        return new Promise((resolve) => {
+            if (!this.serviceWorkerRegistration) {
+                resolve([]);
+                return;
+            }
+            
+            // Attendre que le service worker soit actif
+            const getActiveSW = async () => {
+                if (this.serviceWorkerRegistration.active) {
+                    return this.serviceWorkerRegistration.active;
+                }
+                // Attendre un peu si le service worker n'est pas encore actif
+                await new Promise(r => setTimeout(r, 100));
+                if (this.serviceWorkerRegistration.active) {
+                    return this.serviceWorkerRegistration.active;
+                }
+                return null;
+            };
+            
+            getActiveSW().then(activeSW => {
+                if (!activeSW) {
+                    resolve([]);
+                    return;
+                }
+                
+                const channel = new MessageChannel();
+                channel.port1.onmessage = (event) => {
+                    resolve(event.data.reminders || []);
+                };
+                
+                activeSW.postMessage({
+                    type: 'GET_ALL_REMINDERS'
+                }, [channel.port2]);
+                
+                // Timeout après 2 secondes
+                setTimeout(() => {
+                    resolve([]);
+                }, 2000);
+            });
+        });
+    },
+    
+    // Rendre la liste des rappels actifs
+    renderActiveRemindersList(reminders, decks) {
+        if (!reminders || reminders.length === 0) {
+            return '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">Aucun rappel actif</p>';
+        }
+        
+        const now = Date.now();
+        
+        return reminders.map(reminder => {
+            const deck = decks.find(d => d.id === reminder.deckId);
+            const deckName = deck ? deck.name : reminder.deckName || 'Deck inconnu';
+            const nextNotification = reminder.nextNotification || (now + reminder.intervalMinutes * 60 * 1000);
+            const nextDate = new Date(nextNotification);
+            const timeUntil = nextDate - now;
+            const hoursUntil = Math.floor(timeUntil / (1000 * 60 * 60));
+            const minutesUntil = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
+            
+            let timeText = '';
+            if (hoursUntil > 0) {
+                timeText = `dans ${hoursUntil}h ${minutesUntil}min`;
+            } else if (minutesUntil > 0) {
+                timeText = `dans ${minutesUntil}min`;
+            } else {
+                timeText = 'bientôt';
+            }
+            
+            // Formater l'intervalle de manière plus lisible
+            let intervalText = '';
+            if (reminder.intervalMinutes < 60) {
+                intervalText = `${reminder.intervalMinutes} min`;
+            } else if (reminder.intervalMinutes < 1440) {
+                const hours = Math.floor(reminder.intervalMinutes / 60);
+                intervalText = hours === 1 ? '1 heure' : `${hours} heures`;
+            } else {
+                intervalText = '1 jour';
+            }
+            
+            return `
+                <div class="reminder-item" data-deck-id="${reminder.deckId}">
+                    <div class="reminder-item-content">
+                        <div class="reminder-item-title">${this.escapeHtml(deckName)}</div>
+                        <div class="reminder-item-details">
+                            <span style="color: var(--primary-color); font-weight: 600;">Toutes les ${intervalText}</span> • Prochaine notification ${timeText}
+                        </div>
+                    </div>
+                    <button class="btn-remove-reminder" data-deck-id="${reminder.deckId}">Supprimer</button>
+                </div>
+            `;
+        }).join('');
+    },
+    
+    // Attacher les événements de suppression
+    attachRemoveReminderListeners(reminders) {
+        document.querySelectorAll('.btn-remove-reminder').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const deckId = btn.dataset.deckId;
+                const reminder = reminders.find(r => r.deckId === deckId);
+                
+                if (reminder && confirm(`Supprimer le rappel pour "${reminder.deckName || 'ce deck'}" ?`)) {
+                    if (this.serviceWorkerRegistration && this.serviceWorkerRegistration.active) {
+                        this.serviceWorkerRegistration.active.postMessage({
+                            type: 'REMOVE_REMINDER',
+                            deckId: deckId
+                        });
                     }
                     
-                    // Sauvegarder la configuration
-                    localStorage.setItem('flashcards_reminder_config', JSON.stringify({
-                        enabled: enabled,
-                        time: time,
-                        frequency: frequency
-                    }));
-                    
-                    this.hideModal();
-                    alert(enabled ? 'Rappels de révision activés !' : 'Rappels de révision désactivés.');
+                    // Recharger la liste
+                    setTimeout(() => {
+                        this.loadActiveReminders().then(newReminders => {
+                            const decks = Storage.getDecks();
+                            const listContainer = document.getElementById('active-reminders-list');
+                            if (listContainer) {
+                                listContainer.innerHTML = this.renderActiveRemindersList(newReminders, decks);
+                                this.attachRemoveReminderListeners(newReminders);
+                            }
+                        });
+                    }, 100);
+                }
+            });
+        });
+    },
+    
+    // ============================================
+    // BANDEAU DE NOTIFICATION
+    // ============================================
+    
+    // Variable pour stocker l'intervalle du son
+    notificationSoundInterval: null,
+    notificationAudioContext: null,
+    
+    // Créer un son de notification
+    createNotificationSound() {
+        try {
+            // Réutiliser le contexte audio s'il existe, sinon en créer un nouveau
+            if (!this.notificationAudioContext) {
+                this.notificationAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            const audioContext = this.notificationAudioContext;
+            
+            // Reprendre le contexte s'il est suspendu (nécessaire pour certains navigateurs)
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(() => {
+                    // Ignorer l'erreur si on ne peut pas reprendre
                 });
             }
-        }, 10);
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Fréquence de 800 Hz pour un son agréable
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            // Volume (gain) - plus doux
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+            
+            return audioContext;
+        } catch (error) {
+            console.log('Impossible de créer le son de notification:', error);
+            return null;
+        }
+    },
+    
+    // Jouer le son en boucle
+    playNotificationSoundLoop() {
+        // Arrêter le son précédent s'il existe
+        this.stopNotificationSound();
+        
+        // Jouer le son toutes les 2 secondes
+        this.notificationSoundInterval = setInterval(() => {
+            this.createNotificationSound();
+        }, 2000);
+        
+        // Jouer immédiatement
+        this.createNotificationSound();
+    },
+    
+    // Arrêter le son
+    stopNotificationSound() {
+        if (this.notificationSoundInterval) {
+            clearInterval(this.notificationSoundInterval);
+            this.notificationSoundInterval = null;
+        }
+        // Optionnel : fermer le contexte audio pour économiser les ressources
+        // On ne le fait pas pour pouvoir réutiliser le contexte
+    },
+    
+    // Afficher le toast de notification (style simple comme une notification native)
+    showNotificationBanner(deckName = 'Vos flashcards', deckId = null) {
+        const toast = document.getElementById('notification-toast');
+        const messageEl = document.getElementById('notification-toast-message');
+        
+        if (!toast || !messageEl) return;
+        
+        // Mettre à jour le message (style simple comme l'import)
+        messageEl.textContent = `Il est temps de réviser : ${deckName}`;
+        
+        // Stocker le deckId
+        if (toast.dataset) {
+            toast.dataset.deckId = deckId || '';
+        }
+        
+        // Afficher le toast
+        toast.classList.remove('hidden');
+        
+        // Jouer le son en boucle
+        this.playNotificationSoundLoop();
+        
+        // Configurer le bouton OK
+        const okBtn = document.getElementById('notification-toast-ok');
+        
+        if (okBtn) {
+            // Supprimer les anciens listeners
+            const newOkBtn = okBtn.cloneNode(true);
+            okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+            
+            newOkBtn.addEventListener('click', () => {
+                this.hideNotificationBanner();
+                // Arrêter le son
+                this.stopNotificationSound();
+                
+                // Optionnel : ouvrir le deck si un deckId est fourni
+                if (deckId) {
+                    setTimeout(() => {
+                        this.showDeckDetailView(deckId);
+                    }, 300);
+                }
+            });
+        }
+    },
+    
+    // Masquer le toast de notification
+    hideNotificationBanner() {
+        const toast = document.getElementById('notification-toast');
+        if (toast) {
+            toast.classList.add('hidden');
+        }
+        // Arrêter le son
+        this.stopNotificationSound();
+    },
+    
+    // Détecter si on est sur Windows
+    isWindows() {
+        return navigator.platform.toLowerCase().includes('win') || 
+               navigator.userAgent.toLowerCase().includes('windows');
+    },
+    
+    // Écouter les messages du service worker
+    setupServiceWorkerMessageListener() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SHOW_BANNER_NOTIFICATION') {
+                    const { deckName, deckId } = event.data;
+                    this.showNotificationBanner(deckName || 'Vos flashcards', deckId || null);
+                } else if (event.data && event.data.type === 'OPEN_DECK') {
+                    const { deckId } = event.data;
+                    if (deckId) {
+                        this.showDeckDetailView(deckId);
+                    }
+                }
+            });
+        }
     },
     
     // ============================================

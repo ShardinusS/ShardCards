@@ -28,16 +28,23 @@ self.addEventListener('install', (event) => {
 // Activation du Service Worker
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Suppression de l\'ancien cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('Suppression de l\'ancien cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      initDB().then(() => {
+        startPeriodicCheck();
+      }).catch(err => {
+        console.log('Erreur init DB:', err);
+      })
+    ])
   );
   return self.clients.claim();
 });
@@ -128,108 +135,314 @@ self.addEventListener('fetch', (event) => {
 // GESTION DES NOTIFICATIONS PUSH
 // ============================================
 
-let reminderTimeout = null;
-let reminderInterval = null;
-let reminderConfig = null;
+// Base de données IndexedDB pour stocker les notifications
+let db = null;
+
+// Initialiser IndexedDB
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('FlashcardsNotifications', 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      db = request.result;
+      resolve(db);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('notifications')) {
+        const store = db.createObjectStore('notifications', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('deckId', 'deckId', { unique: false });
+        store.createIndex('nextNotification', 'nextNotification', { unique: false });
+      }
+    };
+  });
+}
+
+// Vérifier et afficher les notifications programmées
+async function checkScheduledNotifications() {
+  if (!db) {
+    await initDB();
+  }
+  
+  if (!db) return; // Si l'init a échoué
+  
+  return new Promise((resolve) => {
+    const now = Date.now();
+    const transaction = db.transaction(['notifications'], 'readwrite');
+    const store = transaction.objectStore('notifications');
+    const index = store.index('nextNotification');
+    const range = IDBKeyRange.upperBound(now);
+    
+    const request = index.openCursor(range);
+    const notificationsToShow = [];
+    
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        const notification = cursor.value;
+        notificationsToShow.push(notification);
+        cursor.continue();
+      } else {
+        // Afficher toutes les notifications qui sont dues
+        notificationsToShow.forEach(notification => {
+          showReviewNotification(notification.deckName || 'Vos flashcards', notification.deckId);
+          scheduleNextNotification(notification);
+        });
+        resolve(notificationsToShow.length);
+      }
+    };
+    
+    request.onerror = () => {
+      resolve(0);
+    };
+  });
+}
+
+// Programmer la prochaine notification
+async function scheduleNextNotification(notification) {
+  if (!db) {
+    await initDB();
+  }
+  
+  const now = Date.now();
+  const intervalMs = notification.intervalMinutes * 60 * 1000;
+  const nextNotification = now + intervalMs;
+  
+  const transaction = db.transaction(['notifications'], 'readwrite');
+  const store = transaction.objectStore('notifications');
+  
+  notification.nextNotification = nextNotification;
+  notification.lastNotification = now;
+  
+  store.put(notification);
+  
+  // Programmer une vérification pour la prochaine notification
+  const delay = nextNotification - now;
+  if (delay > 0 && delay < 2147483647) { // Max pour setTimeout
+    setTimeout(() => {
+      checkScheduledNotifications();
+    }, delay);
+  }
+}
 
 // Écouter les messages du client
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SCHEDULE_REVIEW_REMINDER') {
-    const { time, frequency } = event.data;
-    reminderConfig = { time, frequency };
-    scheduleReviewReminder(time, frequency);
-  } else if (event.data && event.data.type === 'CANCEL_REMINDERS') {
-    cancelAllReminders();
-    reminderConfig = null;
-  } else if (event.data && event.data.type === 'GET_REMINDER_CONFIG') {
-    // Envoyer la configuration actuelle au client
-    event.ports[0].postMessage({ config: reminderConfig });
+self.addEventListener('message', async (event) => {
+  if (!db) {
+    await initDB();
+  }
+  
+  if (event.data && event.data.type === 'ADD_REMINDER') {
+    const { deckId, deckName, intervalMinutes } = event.data;
+    await addReminder(deckId, deckName, intervalMinutes);
+  } else if (event.data && event.data.type === 'REMOVE_REMINDER') {
+    const { deckId } = event.data;
+    await removeReminder(deckId);
+  } else if (event.data && event.data.type === 'GET_ALL_REMINDERS') {
+    const reminders = await getAllReminders();
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ reminders });
+    } else {
+      // Fallback si MessageChannel n'est pas utilisé
+      event.source.postMessage({ type: 'ALL_REMINDERS', reminders }, event.origin);
+    }
+  } else if (event.data && event.data.type === 'CANCEL_ALL_REMINDERS') {
+    await cancelAllReminders();
   }
 });
 
-// Planifier un rappel de révision
-function scheduleReviewReminder(time, frequency) {
-  // Annuler les rappels existants
-  cancelAllReminders();
-  
-  if (!time) return;
-  
-  const now = Date.now();
-  let nextNotificationTime;
-  
-  if (frequency === 'daily') {
-    // Notification quotidienne à l'heure choisie
-    const [hours, minutes] = time.split(':').map(Number);
-    nextNotificationTime = new Date();
-    nextNotificationTime.setHours(hours, minutes, 0, 0);
-    
-    // Si l'heure est déjà passée aujourd'hui, programmer pour demain
-    if (nextNotificationTime.getTime() <= now) {
-      nextNotificationTime.setDate(nextNotificationTime.getDate() + 1);
-    }
-    
-    const delay = nextNotificationTime.getTime() - now;
-    
-    reminderTimeout = setTimeout(() => {
-      showReviewNotification();
-      // Programmer la prochaine notification quotidienne
-      scheduleReviewReminder(time, frequency);
-    }, delay);
-    
-  } else if (frequency === 'hourly') {
-    // Notification toutes les heures
-    nextNotificationTime = new Date(now + 60 * 60 * 1000);
-    nextNotificationTime.setMinutes(0, 0, 0);
-    
-    const delay = nextNotificationTime.getTime() - now;
-    
-    reminderTimeout = setTimeout(() => {
-      showReviewNotification();
-      // Programmer la prochaine notification horaire
-      scheduleReviewReminder(time, frequency);
-    }, delay);
-    
-  } else {
-    // Notification unique à l'heure choisie
-    const [hours, minutes] = time.split(':').map(Number);
-    nextNotificationTime = new Date();
-    nextNotificationTime.setHours(hours, minutes, 0, 0);
-    
-    if (nextNotificationTime.getTime() <= now) {
-      return; // L'heure est déjà passée
-    }
-    
-    const delay = nextNotificationTime.getTime() - now;
-    
-    reminderTimeout = setTimeout(() => {
-      showReviewNotification();
-      reminderConfig = null; // Notification unique, ne plus programmer
-    }, delay);
+// Ajouter un rappel
+async function addReminder(deckId, deckName, intervalMinutes) {
+  if (!db) {
+    await initDB();
   }
+  
+  if (!db) return;
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['notifications'], 'readwrite');
+    const store = transaction.objectStore('notifications');
+    const index = store.index('deckId');
+    
+    // Vérifier si un rappel existe déjà pour ce deck
+    const existingRequest = index.get(deckId);
+    existingRequest.onsuccess = () => {
+      const existing = existingRequest.result;
+      const now = Date.now();
+      const nextNotification = now + (intervalMinutes * 60 * 1000);
+      
+      const notification = {
+        id: existing ? existing.id : undefined,
+        deckId: deckId,
+        deckName: deckName,
+        intervalMinutes: intervalMinutes,
+        nextNotification: nextNotification,
+        lastNotification: null,
+        createdAt: existing ? existing.createdAt : now
+      };
+      
+      const putRequest = store.put(notification);
+      putRequest.onsuccess = () => {
+        // Programmer la première notification
+        const delay = intervalMinutes * 60 * 1000;
+        if (delay > 0 && delay < 2147483647) {
+          setTimeout(() => {
+            checkScheduledNotifications();
+          }, delay);
+        }
+        resolve();
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+    existingRequest.onerror = () => reject(existingRequest.error);
+  });
+}
+
+// Supprimer un rappel
+async function removeReminder(deckId) {
+  if (!db) {
+    await initDB();
+  }
+  
+  if (!db) return;
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['notifications'], 'readwrite');
+    const store = transaction.objectStore('notifications');
+    const index = store.index('deckId');
+    
+    const request = index.get(deckId);
+    request.onsuccess = () => {
+      if (request.result) {
+        const deleteRequest = store.delete(request.result.id);
+        deleteRequest.onsuccess = () => resolve();
+        deleteRequest.onerror = () => reject(deleteRequest.error);
+      } else {
+        resolve();
+      }
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Obtenir tous les rappels
+async function getAllReminders() {
+  if (!db) {
+    await initDB();
+  }
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['notifications'], 'readonly');
+    const store = transaction.objectStore('notifications');
+    const request = store.getAll();
+    
+    request.onsuccess = () => {
+      resolve(request.result || []);
+    };
+    
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
 }
 
 // Annuler tous les rappels
-function cancelAllReminders() {
-  if (reminderTimeout) {
-    clearTimeout(reminderTimeout);
-    reminderTimeout = null;
+async function cancelAllReminders() {
+  if (!db) {
+    await initDB();
   }
-  if (reminderInterval) {
-    clearInterval(reminderInterval);
-    reminderInterval = null;
+  
+  const transaction = db.transaction(['notifications'], 'readwrite');
+  const store = transaction.objectStore('notifications');
+  store.clear();
+}
+
+// Vérifier périodiquement les notifications
+let checkInterval = null;
+
+function startPeriodicCheck() {
+  // Vérifier toutes les minutes
+  if (checkInterval) {
+    clearInterval(checkInterval);
   }
+  
+  checkInterval = setInterval(() => {
+    checkScheduledNotifications();
+  }, 60000);
+  
+  // Vérifier immédiatement
+  checkScheduledNotifications();
+}
+
+// Vérifier au démarrage et à chaque activation
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(
+    initDB().then(() => {
+      startPeriodicCheck();
+    })
+  );
+});
+
+// Initialiser la base de données et démarrer la vérification au chargement du service worker
+if (typeof indexedDB !== 'undefined') {
+  initDB().then(() => {
+    startPeriodicCheck();
+  }).catch(err => {
+    console.log('Erreur init DB au chargement:', err);
+  });
+}
+
+// Détecter si on est sur Windows
+function isWindows() {
+  // Dans un service worker, on ne peut pas accéder à navigator.platform directement
+  // On va utiliser les clients pour détecter
+  return clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(clientList => {
+      if (clientList.length > 0) {
+        // On peut envoyer un message pour demander, mais pour simplifier,
+        // on va toujours essayer d'envoyer un message au client d'abord
+        return false; // On va toujours essayer le bandeau d'abord
+      }
+      return false;
+    })
+    .catch(() => false);
 }
 
 // Afficher une notification de rappel
-function showReviewNotification() {
+async function showReviewNotification(deckName = 'Vos flashcards', deckId = null) {
+  // Essayer d'envoyer un message au client pour afficher le bandeau
+  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  
+  if (clientList.length > 0) {
+    // Il y a au moins un client ouvert, envoyer un message pour afficher le bandeau
+    clientList.forEach(client => {
+      client.postMessage({
+        type: 'SHOW_BANNER_NOTIFICATION',
+        deckName: deckName,
+        deckId: deckId
+      });
+    });
+    
+    // Sur Windows, on n'affiche pas de notification système si le client est ouvert
+    // On peut aussi afficher une notification système en plus si désiré
+    // Pour l'instant, on affiche seulement le bandeau
+    return;
+  }
+  
+  // Si aucun client n'est ouvert, afficher une notification système
   const title = 'Rappel de révision';
   const options = {
-    body: 'Il est temps de réviser vos flashcards !',
+    body: `Il est temps de réviser : ${deckName}`,
     icon: './icon-192.png',
     badge: './icon-192.png',
     tag: 'review-reminder',
     requireInteraction: false,
     vibrate: [200, 100, 200],
+    data: {
+      url: './index.html',
+      deckId: deckId
+    },
     actions: [
       {
         action: 'open',
@@ -249,6 +462,8 @@ function showReviewNotification() {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
+  const deckId = event.notification.data?.deckId;
+  
   if (event.action === 'open' || !event.action) {
     // Ouvrir l'application
     event.waitUntil(
@@ -257,7 +472,14 @@ self.addEventListener('notificationclick', (event) => {
           // Si une fenêtre est déjà ouverte, la mettre au premier plan
           for (let i = 0; i < clientList.length; i++) {
             const client = clientList[i];
-            if (client.url === self.registration.scope && 'focus' in client) {
+            if (client.url.includes(self.registration.scope) && 'focus' in client) {
+              // Envoyer un message pour ouvrir le deck si nécessaire
+              if (deckId) {
+                client.postMessage({
+                  type: 'OPEN_DECK',
+                  deckId: deckId
+                });
+              }
               return client.focus();
             }
           }
