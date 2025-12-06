@@ -451,8 +451,8 @@ const App = {
             ];
         }
         
-        menuItems.innerHTML = items.map(item => `
-            <button class="hamburger-menu-item" onclick="App.hamburgerMenuAction(${items.indexOf(item)})">
+        menuItems.innerHTML = items.map((item, index) => `
+            <button class="hamburger-menu-item" data-menu-index="${index}">
                 <span class="hamburger-menu-item-icon">${Icons.getIcon(item.icon, 20, 'currentColor')}</span>
                 <span>${item.text}</span>
             </button>
@@ -460,6 +460,18 @@ const App = {
         
         // Stocker les actions pour pouvoir les appeler
         this.currentMenuActions = items.map(item => item.action);
+        
+        // Ajouter les event listeners pour les boutons du menu (click et touchstart pour iPhone)
+        const menuButtons = menuItems.querySelectorAll('.hamburger-menu-item');
+        menuButtons.forEach((button, index) => {
+            const handleAction = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.hamburgerMenuAction(index);
+            };
+            button.addEventListener('click', handleAction);
+            button.addEventListener('touchend', handleAction);
+        });
         
         menu.classList.remove('hidden');
     },
@@ -504,8 +516,8 @@ const App = {
             return `
                 <div class="deck-card" data-deck-id="${deck.id}">
                     <div class="deck-actions">
-                        <button class="deck-action-btn" onclick="App.deleteDeck('${deck.id}')" title="Supprimer">${Icons.getIcon('delete', 16, 'currentColor')}</button>
-                        <button class="deck-action-btn" onclick="App.startReview('${deck.id}')" title="Réviser">${Icons.getIcon('refresh', 16, 'currentColor')}</button>
+                        <button class="deck-action-btn" data-deck-id="${deck.id}" data-action="delete" title="Supprimer">${Icons.getIcon('delete', 16, 'currentColor')}</button>
+                        <button class="deck-action-btn" data-deck-id="${deck.id}" data-action="review" title="Réviser">${Icons.getIcon('refresh', 16, 'currentColor')}</button>
                     </div>
                     <h3>${this.escapeHtml(deck.name)}</h3>
                     <div class="deck-info">
@@ -515,6 +527,23 @@ const App = {
                 </div>
             `;
         }).join('');
+        
+        // Ajouter les event listeners pour les boutons de deck (click et touchend pour iPhone)
+        container.querySelectorAll('.deck-action-btn').forEach(btn => {
+            const deckId = btn.getAttribute('data-deck-id');
+            const action = btn.getAttribute('data-action');
+            const handleAction = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (action === 'delete') {
+                    this.deleteDeck(deckId);
+                } else if (action === 'review') {
+                    this.startReview(deckId);
+                }
+            };
+            btn.addEventListener('click', handleAction);
+            btn.addEventListener('touchend', handleAction);
+        });
         
         container.querySelectorAll('.deck-card').forEach(card => {
             const deckId = card.dataset.deckId;
@@ -621,12 +650,32 @@ const App = {
                         </div>
                     </div>
                     <div class="card-item-actions">
-                        <button class="card-action-btn" onclick="App.editCard(${index})">Modifier</button>
-                        <button class="card-action-btn" onclick="App.deleteCard(${index})" style="color: var(--error);">Supprimer</button>
+                        <button class="card-action-btn" data-card-index="${index}" data-action="edit">Modifier</button>
+                        <button class="card-action-btn" data-card-index="${index}" data-action="delete" style="color: var(--error);">Supprimer</button>
                     </div>
                 </div>
             `;
         }).join('');
+        
+        // Ajouter les event listeners pour les boutons de carte (click et touchend pour iPhone)
+        const cardsContainer = document.getElementById('cards-container');
+        if (cardsContainer) {
+            cardsContainer.querySelectorAll('.card-action-btn').forEach(btn => {
+                const cardIndex = parseInt(btn.getAttribute('data-card-index'));
+                const action = btn.getAttribute('data-action');
+                const handleAction = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (action === 'edit') {
+                        this.editCard(cardIndex);
+                    } else if (action === 'delete') {
+                        this.deleteCard(cardIndex);
+                    }
+                };
+                btn.addEventListener('click', handleAction);
+                btn.addEventListener('touchend', handleAction);
+            });
+        }
         
         // Pas besoin d'appliquer la taille proportionnelle dans la liste
         // La question et la réponse ont la même taille pour faciliter la lecture
@@ -700,16 +749,27 @@ const App = {
         
         setTimeout(() => {
             const form = document.getElementById('edit-deck-form');
+            const submitBtn = form?.querySelector('button[type="submit"]');
             if (form) {
-                form.addEventListener('submit', (e) => {
+                const handleSubmit = (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     const name = document.getElementById('edit-deck-name').value.trim();
                     if (name) {
                         this.vibrate();
                         this.updateDeck(name);
                         this.hideModal();
                     }
-                });
+                };
+                form.addEventListener('submit', handleSubmit);
+                // Ajouter touchstart pour iPhone
+                if (submitBtn) {
+                    submitBtn.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSubmit(e);
+                    });
+                }
             }
         }, 10);
     },
@@ -735,9 +795,11 @@ const App = {
         
         setTimeout(() => {
             const form = document.getElementById('review-settings-form');
+            const submitBtn = form?.querySelector('button[type="submit"]');
             if (form) {
-                form.addEventListener('submit', (e) => {
+                const handleSubmit = (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     const cardsPerSession = parseInt(document.getElementById('cards-per-session').value);
                     if (cardsPerSession > 0 && cardsPerSession <= 100) {
                         this.vibrate();
@@ -921,11 +983,15 @@ const App = {
                                 frontImagePreview.innerHTML = `<img src="${base64}" alt="Aperçu" class="preview-image"><button type="button" class="btn-remove-preview" id="btn-remove-front-new">×</button>`;
                                 const newBtn = document.getElementById('btn-remove-front-new');
                                 if (newBtn) {
-                                    newBtn.addEventListener('click', () => {
+                                    const handleRemove = (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         imageData.front = null;
                                         if (frontImageInput) frontImageInput.value = '';
                                         if (frontImagePreview) frontImagePreview.innerHTML = '';
-                                    });
+                                    };
+                                    newBtn.addEventListener('click', handleRemove);
+                                    newBtn.addEventListener('touchend', handleRemove);
                                 }
                             }
                         } catch (error) {
@@ -951,11 +1017,15 @@ const App = {
                                 backImagePreview.innerHTML = `<img src="${base64}" alt="Aperçu" class="preview-image"><button type="button" class="btn-remove-preview" id="btn-remove-back-new">×</button>`;
                                 const newBtn = document.getElementById('btn-remove-back-new');
                                 if (newBtn) {
-                                    newBtn.addEventListener('click', () => {
+                                    const handleRemove = (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         imageData.back = null;
                                         if (backImageInput) backImageInput.value = '';
                                         if (backImagePreview) backImagePreview.innerHTML = '';
-                                    });
+                                    };
+                                    newBtn.addEventListener('click', handleRemove);
+                                    newBtn.addEventListener('touchend', handleRemove);
                                 }
                             }
                         } catch (error) {
@@ -966,8 +1036,10 @@ const App = {
             }
             
             if (form) {
-                form.addEventListener('submit', async (e) => {
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const handleSubmit = async (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     const front = document.getElementById('input-card-front').value.trim();
                     const back = document.getElementById('input-card-back').value.trim();
                     
@@ -990,7 +1062,16 @@ const App = {
                     this.vibrate();
                     await this.createCard(front, back, imageData.front, imageData.back);
                     this.hideModal();
-                });
+                };
+                form.addEventListener('submit', handleSubmit);
+                // Ajouter touchstart pour iPhone
+                if (submitBtn) {
+                    submitBtn.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSubmit(e);
+                    });
+                }
             }
         }, 10);
     },
@@ -1054,26 +1135,38 @@ const App = {
             const btnRemoveBack = document.getElementById('btn-remove-edit-back');
             
             if (btnRemoveFront) {
-                btnRemoveFront.addEventListener('click', () => {
+                const handleRemoveFront = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     editImageData.front = null;
                     if (frontImageInput) frontImageInput.value = '';
                     if (frontImagePreview) frontImagePreview.innerHTML = '';
-                });
+                };
+                btnRemoveFront.addEventListener('click', handleRemoveFront);
+                btnRemoveFront.addEventListener('touchend', handleRemoveFront);
             }
             
             if (btnRemoveBack) {
-                btnRemoveBack.addEventListener('click', () => {
+                const handleRemoveBack = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     editImageData.back = null;
                     if (backImageInput) backImageInput.value = '';
                     if (backImagePreview) backImagePreview.innerHTML = '';
-                });
+                };
+                btnRemoveBack.addEventListener('click', handleRemoveBack);
+                btnRemoveBack.addEventListener('touchend', handleRemoveBack);
             }
             
             // Gestion de l'upload d'image pour la question
             if (btnImportFront && frontImageInput) {
-                btnImportFront.addEventListener('click', () => {
+                const handleImportFrontEdit = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     frontImageInput.click();
-                });
+                };
+                btnImportFront.addEventListener('click', handleImportFrontEdit);
+                btnImportFront.addEventListener('touchend', handleImportFrontEdit);
                 
                 frontImageInput.addEventListener('change', async (e) => {
                     const file = e.target.files[0];
@@ -1101,9 +1194,13 @@ const App = {
             
             // Gestion de l'upload d'image pour la réponse
             if (btnImportBack && backImageInput) {
-                btnImportBack.addEventListener('click', () => {
+                const handleImportBackEdit = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     backImageInput.click();
-                });
+                };
+                btnImportBack.addEventListener('click', handleImportBackEdit);
+                btnImportBack.addEventListener('touchend', handleImportBackEdit);
                 
                 backImageInput.addEventListener('change', async (e) => {
                     const file = e.target.files[0];
@@ -1115,11 +1212,15 @@ const App = {
                                 backImagePreview.innerHTML = `<img src="${base64}" alt="Aperçu" class="preview-image"><button type="button" class="btn-remove-preview" id="btn-remove-edit-back-new">×</button>`;
                                 const newBtn = document.getElementById('btn-remove-edit-back-new');
                                 if (newBtn) {
-                                    newBtn.addEventListener('click', () => {
+                                    const handleRemove = (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         editImageData.back = null;
                                         if (backImageInput) backImageInput.value = '';
                                         if (backImagePreview) backImagePreview.innerHTML = '';
-                                    });
+                                    };
+                                    newBtn.addEventListener('click', handleRemove);
+                                    newBtn.addEventListener('touchend', handleRemove);
                                 }
                             }
                         } catch (error) {
@@ -1130,8 +1231,10 @@ const App = {
             }
             
             if (form) {
-                form.addEventListener('submit', async (e) => {
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const handleSubmit = async (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     const front = document.getElementById('input-edit-card-front').value.trim();
                     const back = document.getElementById('input-edit-card-back').value.trim();
                     
@@ -1154,7 +1257,16 @@ const App = {
                     this.vibrate();
                     await this.updateCard(cardIndex, front, back, editImageData.front, editImageData.back);
                     this.hideModal();
-                });
+                };
+                form.addEventListener('submit', handleSubmit);
+                // Ajouter touchstart pour iPhone
+                if (submitBtn) {
+                    submitBtn.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSubmit(e);
+                    });
+                }
             }
         }, 10);
     },
@@ -2188,22 +2300,52 @@ const App = {
     },
     
     // Vibration de validation (pour iPhone)
+    // Note: iOS Safari ne supporte pas navigator.vibrate()
+    // On utilise un workaround avec un input switch qui déclenche le feedback haptique
     vibrate(duration = 10) {
-        // Vérifier si on est sur iOS et si l'API de vibration est disponible
-        if (this.isIOS() && 'vibrate' in navigator) {
+        if (this.isIOS()) {
+            // Workaround pour iOS : utiliser un input switch invisible
+            // Safari 17.4+ déclenche un feedback haptique lors du toggle d'un switch
             try {
-                // Sur iOS, une vibration courte (10ms) donne un feedback tactile agréable
-                navigator.vibrate(duration);
+                // Créer un input switch temporaire et invisible
+                const switchInput = document.createElement('input');
+                switchInput.type = 'checkbox';
+                switchInput.style.cssText = 'position: fixed; opacity: 0; pointer-events: none; width: 0; height: 0;';
+                switchInput.checked = false;
+                
+                // Ajouter au DOM
+                document.body.appendChild(switchInput);
+                
+                // Toggle pour déclencher le feedback haptique
+                setTimeout(() => {
+                    switchInput.checked = true;
+                    // Toggle immédiatement pour créer le feedback
+                    setTimeout(() => {
+                        switchInput.checked = false;
+                        // Retirer du DOM après un court délai
+                        setTimeout(() => {
+                            if (switchInput.parentNode) {
+                                switchInput.parentNode.removeChild(switchInput);
+                            }
+                        }, 100);
+                    }, 10);
+                }, 10);
             } catch (e) {
-                // Ignorer les erreurs si la vibration n'est pas supportée
-                console.log('Vibration non disponible:', e);
+                // Si le workaround ne fonctionne pas, essayer navigator.vibrate (peut ne pas fonctionner)
+                if ('vibrate' in navigator) {
+                    try {
+                        navigator.vibrate(50);
+                    } catch (err) {
+                        // Ignorer
+                    }
+                }
             }
         } else if (this.isMobile() && 'vibrate' in navigator) {
-            // Pour les autres appareils mobiles (Android), utiliser aussi la vibration
+            // Pour Android et autres appareils mobiles
             try {
-                navigator.vibrate(duration);
+                navigator.vibrate(50);
             } catch (e) {
-                console.log('Vibration non disponible:', e);
+                // Ignorer les erreurs
             }
         }
     },
