@@ -2278,36 +2278,80 @@ const App = {
     
     // Détecter si on est sur iOS/iPhone
     isIOS() {
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
     },
     
-    // Vibration de validation (pour iPhone)
+    // Vérifier si l'API de vibration est disponible et fonctionnelle
+    canVibrate() {
+        return 'vibrate' in navigator && typeof navigator.vibrate === 'function';
+    },
+    
+    // Vibration de validation (pour iPhone et Android)
     // Note: iOS Safari ne supporte pas navigator.vibrate()
     // On utilise un workaround avec un input switch qui déclenche le feedback haptique
     // IMPORTANT: Ce hack n'est pas fiable à 100% car iOS ne permet pas officiellement
     // les vibrations dans les PWA. Pour une solution fiable, il faut une app native.
-    vibrate(duration = 10) {
+    // 
+    // IMPORTANT: navigator.vibrate() nécessite une interaction utilisateur préalable
+    // (clic, toucher, etc.) pour fonctionner. Si la vibration ne fonctionne pas,
+    // c'est probablement parce qu'elle est appelée avant une interaction utilisateur.
+    vibrate(duration = 50) {
         const isIOS = this.isIOS();
+        const isMobile = this.isMobile();
         
-        if (!isIOS) {
-            // Pour Android et autres appareils mobiles
-            if (this.isMobile() && 'vibrate' in navigator) {
-                try {
-                    navigator.vibrate(50);
-                } catch (e) {
-                    // Ignorer les erreurs
+        // Pour Android/Chrome mobile et autres appareils qui supportent navigator.vibrate
+        if (!isIOS && this.canVibrate()) {
+            try {
+                // Essayer de vibrer (fonctionne sur Android/Chrome mobile)
+                // Note: navigator.vibrate() nécessite une interaction utilisateur préalable
+                // Si elle est appelée dans un gestionnaire d'événement utilisateur, elle devrait fonctionner
+                const result = navigator.vibrate(duration);
+                
+                // navigator.vibrate() retourne:
+                // - true: la vibration a été acceptée
+                // - false: la vibration a été refusée (pas d'interaction utilisateur ou permissions)
+                // - undefined: la vibration a été acceptée (comportement selon navigateur)
+                
+                // Si ça retourne false, l'API n'est pas disponible ou a été refusée
+                if (result === false) {
+                    // Sur mobile mais API refusée, essayer quand même le hack iOS
+                    if (isMobile) {
+                        this.tryIOSHapticFeedback();
+                    }
                 }
+                // Si result est true ou undefined, la vibration a été acceptée
+                return;
+            } catch (e) {
+                // Si erreur et on est sur mobile, essayer le hack iOS
+                if (isMobile) {
+                    this.tryIOSHapticFeedback();
+                }
+                return;
             }
-            return;
         }
         
-        // Workaround pour iOS : utiliser un input switch minuscule mais visible
-        // iOS déclenche plus volontiers le feedback haptique si l'élément existe visuellement
+        // Pour iOS : utiliser le workaround avec input switch
+        if (isIOS) {
+            this.tryIOSHapticFeedback();
+        }
+    },
+    
+    // Workaround pour iOS : utiliser un input switch avec label
+    // Inspiré des techniques de ios-haptics (https://github.com/...) et use-haptic
+    // Technique documentée dans les articles techniques 2025 : un switch avec un <label>
+    // cliqué ou légèrement visible déclenche mieux le feedback haptique natif iOS
+    // Références: https://iifx.dev/articles/ios-haptics-in-pwa
+    tryIOSHapticFeedback() {
         try {
-            // Créer un input switch temporaire, minuscule mais pas complètement invisible
+            // Créer un input switch temporaire, légèrement visible mais hors écran
             const switchInput = document.createElement('input');
             switchInput.type = 'checkbox';
-            // Style: minuscule, presque invisible, hors écran, mais opacity > 0 pour que iOS le reconnaisse
+            switchInput.id = 'haptic-switch-' + Date.now();
+            switchInput.checked = false;
+            
+            // Style: minuscule, très légèrement visible (opacity > 0), hors écran
+            // iOS déclenche mieux le haptique si l'élément existe visuellement
             switchInput.style.cssText = `
                 position: absolute;
                 width: 1px;
@@ -2316,34 +2360,67 @@ const App = {
                 left: -10px;
                 top: -10px;
                 pointer-events: none;
+                margin: 0;
+                padding: 0;
             `;
-            switchInput.checked = false;
+            
+            // Créer un label associé (technique recommandée par ios-haptics)
+            // Un label cliqué déclenche mieux le feedback haptique
+            const switchLabel = document.createElement('label');
+            switchLabel.htmlFor = switchInput.id;
+            switchLabel.style.cssText = `
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                opacity: 0.01;
+                left: -10px;
+                top: -10px;
+                pointer-events: none;
+                margin: 0;
+                padding: 0;
+            `;
             
             // Ajouter au DOM
             document.body.appendChild(switchInput);
+            document.body.appendChild(switchLabel);
             
-            // Focus forcé avant le toggle pour augmenter les chances de déclencher le haptique
-            switchInput.focus();
+            // Technique 1: Toggle direct du switch
+            // Focus forcé avant le toggle pour augmenter les chances
+            try {
+                switchInput.focus();
+            } catch (e) {
+                // Ignorer si focus échoue
+            }
             
             // Toggle pour déclencher le feedback haptique
-            // Utiliser un toggle simple plutôt que deux setTimeout
             switchInput.checked = !switchInput.checked;
+            
+            // Technique 2: Simuler un clic sur le label (alternative)
+            // Certaines versions d'iOS répondent mieux à un clic sur le label
+            setTimeout(() => {
+                try {
+                    const clickEvent = new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    });
+                    switchLabel.dispatchEvent(clickEvent);
+                } catch (e) {
+                    // Ignorer si dispatchEvent échoue
+                }
+            }, 10);
             
             // Retirer du DOM rapidement
             setTimeout(() => {
                 if (switchInput.parentNode) {
                     switchInput.remove();
                 }
-            }, 50);
-        } catch (e) {
-            // Si le workaround ne fonctionne pas, essayer navigator.vibrate (ne fonctionnera probablement pas)
-            if ('vibrate' in navigator) {
-                try {
-                    navigator.vibrate(50);
-                } catch (err) {
-                    // Ignorer silencieusement
+                if (switchLabel.parentNode) {
+                    switchLabel.remove();
                 }
-            }
+            }, 100);
+        } catch (e) {
+            // Ignorer silencieusement les erreurs
         }
     },
     
