@@ -5,9 +5,10 @@ const urlsToCache = [
   './index.html',
   './style.css',
   './script.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './manifest.json'
+  // Les icônes sont optionnelles - ne pas les mettre en cache si elles n'existent pas
+  // './icon-192.png',
+  // './icon-512.png'
 ];
 
 // Installation du Service Worker
@@ -409,33 +410,16 @@ function isWindows() {
     .catch(() => false);
 }
 
-// Afficher une notification de rappel
+// Afficher une notification de rappel (uniquement notifications système pour mobile)
 async function showReviewNotification(deckName = 'Vos flashcards', deckId = null) {
-  // Essayer d'envoyer un message au client pour afficher le bandeau
-  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-  
-  if (clientList.length > 0) {
-    // Il y a au moins un client ouvert, envoyer un message pour afficher le bandeau
-    clientList.forEach(client => {
-      client.postMessage({
-        type: 'SHOW_BANNER_NOTIFICATION',
-        deckName: deckName,
-        deckId: deckId
-      });
-    });
-    
-    // Sur Windows, on n'affiche pas de notification système si le client est ouvert
-    // On peut aussi afficher une notification système en plus si désiré
-    // Pour l'instant, on affiche seulement le bandeau
-    return;
-  }
-  
-  // Si aucun client n'est ouvert, afficher une notification système
+  // Toujours afficher une notification système native (pour mobile)
+  // Sur desktop, cette fonction ne sera jamais appelée car les rappels sont désactivés
   const title = 'Rappel de révision';
   const options = {
     body: `Il est temps de réviser : ${deckName}`,
-    icon: './icon-192.png',
-    badge: './icon-192.png',
+    // Les icônes sont optionnelles
+    // icon: './icon-192.png',
+    // badge: './icon-192.png',
     tag: 'review-reminder',
     requireInteraction: false,
     vibrate: [200, 100, 200],

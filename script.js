@@ -250,8 +250,10 @@ const App = {
         this.renderDecks();
         this.registerServiceWorker();
         
-        // Restaurer les rappels de révision si configurés
-        this.restoreReviewReminders();
+        // Restaurer les rappels de révision si configurés (uniquement sur mobile)
+        if (this.isMobile()) {
+            this.restoreReviewReminders();
+        }
         
         // Afficher le popup d'aide lors de la première visite
         this.checkFirstVisit();
@@ -1749,6 +1751,22 @@ const App = {
     
     // Configurer les rappels de révision par deck
     configureReviewReminders() {
+        // Vérifier si on est sur mobile
+        if (!this.isMobile()) {
+            this.showModal(
+                'Rappels non disponibles',
+                `<div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📱</div>
+                    <h3 style="margin-bottom: 15px; color: var(--text-primary);">Rappels disponibles uniquement sur mobile</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">
+                        La fonctionnalité de rappels de révision est uniquement disponible sur les appareils mobiles (iPhone, Android).<br><br>
+                        Sur ordinateur, vous pouvez toujours utiliser l'application pour réviser vos flashcards, mais les notifications de rappel ne sont pas disponibles.
+                    </p>
+                </div>`
+            );
+            return;
+        }
+        
         const decks = Storage.getDecks();
         
         // Charger les rappels existants
@@ -2141,6 +2159,13 @@ const App = {
         this.stopNotificationSound();
     },
     
+    // Détecter si on est sur mobile
+    isMobile() {
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+        return mobileRegex.test(userAgent.toLowerCase());
+    },
+    
     // Détecter si on est sur Windows
     isWindows() {
         return navigator.platform.toLowerCase().includes('win') || 
@@ -2151,13 +2176,14 @@ const App = {
     setupServiceWorkerMessageListener() {
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'SHOW_BANNER_NOTIFICATION') {
-                    const { deckName, deckId } = event.data;
-                    this.showNotificationBanner(deckName || 'Vos flashcards', deckId || null);
-                } else if (event.data && event.data.type === 'OPEN_DECK') {
-                    const { deckId } = event.data;
-                    if (deckId) {
-                        this.showDeckDetailView(deckId);
+                // Sur mobile uniquement, on peut gérer les messages du service worker
+                // Sur desktop, les rappels sont désactivés donc on ignore ces messages
+                if (this.isMobile()) {
+                    if (event.data && event.data.type === 'OPEN_DECK') {
+                        const { deckId } = event.data;
+                        if (deckId) {
+                            this.showDeckDetailView(deckId);
+                        }
                     }
                 }
             });

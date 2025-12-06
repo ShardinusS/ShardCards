@@ -95,6 +95,39 @@
             alert('Icônes téléchargées ! Placez-les dans le dossier racine du projet.');
         }
         
+        // Fonction pour sauvegarder directement via l'API File System (si disponible)
+        async function saveIconsAutomatically() {
+            if ('showDirectoryPicker' in window) {
+                try {
+                    const dirHandle = await window.showDirectoryPicker();
+                    const canvas192 = document.getElementById('icon192');
+                    const canvas512 = document.getElementById('icon512');
+                    
+                    drawIcon(canvas192, 192);
+                    drawIcon(canvas512, 512);
+                    
+                    const blob192 = await new Promise(resolve => canvas192.toBlob(resolve, 'image/png'));
+                    const blob512 = await new Promise(resolve => canvas512.toBlob(resolve, 'image/png'));
+                    
+                    const fileHandle192 = await dirHandle.getFileHandle('icon-192.png', { create: true });
+                    const fileHandle512 = await dirHandle.getFileHandle('icon-512.png', { create: true });
+                    
+                    const writable192 = await fileHandle192.createWritable();
+                    const writable512 = await fileHandle512.createWritable();
+                    
+                    await writable192.write(blob192);
+                    await writable512.write(blob512);
+                    
+                    await writable192.close();
+                    await writable512.close();
+                    
+                    alert('Icônes sauvegardées automatiquement !');
+                } catch (error) {
+                    console.log('Sauvegarde automatique impossible, utilisez le bouton de téléchargement');
+                }
+            }
+        }
+        
         // Dessiner les aperçus
         window.onload = function() {
             drawIcon(document.getElementById('icon192'), 192);
