@@ -26,7 +26,8 @@ const Icons = {
             grid: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`,
             clock: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
             bell: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`,
-            arrowDown: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+            arrowDown: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
+            smartphone: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`
         };
         return icons[name] || '';
     }
@@ -472,6 +473,7 @@ const App = {
     
     hamburgerMenuAction(index) {
         if (this.currentMenuActions && this.currentMenuActions[index]) {
+            this.vibrate();
             this.currentMenuActions[index]();
         }
     },
@@ -667,6 +669,7 @@ const App = {
                     e.preventDefault();
                     const name = document.getElementById('deck-name').value.trim();
                     if (name) {
+                        this.vibrate();
                         this.createDeck(name);
                         this.hideModal();
                     }
@@ -702,6 +705,7 @@ const App = {
                     e.preventDefault();
                     const name = document.getElementById('edit-deck-name').value.trim();
                     if (name) {
+                        this.vibrate();
                         this.updateDeck(name);
                         this.hideModal();
                     }
@@ -736,6 +740,7 @@ const App = {
                     e.preventDefault();
                     const cardsPerSession = parseInt(document.getElementById('cards-per-session').value);
                     if (cardsPerSession > 0 && cardsPerSession <= 100) {
+                        this.vibrate();
                         this.cardsPerSession = cardsPerSession;
                         // Sauvegarder dans localStorage
                         localStorage.setItem('flashcards_cardsPerSession', cardsPerSession.toString());
@@ -982,6 +987,7 @@ const App = {
                         return;
                     }
                     
+                    this.vibrate();
                     await this.createCard(front, back, imageData.front, imageData.back);
                     this.hideModal();
                 });
@@ -1145,6 +1151,7 @@ const App = {
                         return;
                     }
                     
+                    this.vibrate();
                     await this.updateCard(cardIndex, front, back, editImageData.front, editImageData.back);
                     this.hideModal();
                 });
@@ -1181,6 +1188,7 @@ const App = {
     
     deleteDeck(id) {
         if (confirm('Êtes-vous sûr de vouloir supprimer ce deck ?')) {
+            this.vibrate();
             Storage.deleteDeck(id);
             if (this.currentDeckId === id) {
                 this.showDecksView();
@@ -1266,6 +1274,7 @@ const App = {
     deleteCard(index) {
         if (!this.currentDeckId) return;
         if (confirm('Êtes-vous sûr de vouloir supprimer cette carte ?')) {
+            this.vibrate();
             const deck = Storage.getDeck(this.currentDeckId);
             if (deck && deck.cards[index]) {
                 deck.cards.splice(index, 1);
@@ -1756,7 +1765,9 @@ const App = {
             this.showModal(
                 'Rappels non disponibles',
                 `<div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">📱</div>
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 0 auto 20px; background: var(--primary-color); border-radius: 50%;">
+                        ${Icons.getIcon('smartphone', 48, 'white')}
+                    </div>
                     <h3 style="margin-bottom: 15px; color: var(--text-primary);">Rappels disponibles uniquement sur mobile</h3>
                     <p style="color: var(--text-secondary); line-height: 1.6;">
                         La fonctionnalité de rappels de révision est uniquement disponible sur les appareils mobiles (iPhone, Android).<br><br>
@@ -1857,6 +1868,7 @@ const App = {
                             if (!confirm('Un rappel existe déjà pour ce deck. Voulez-vous le remplacer ?')) {
                                 return;
                             }
+                            this.vibrate();
                         }
                         
                         // Demander la permission si nécessaire
@@ -1865,6 +1877,9 @@ const App = {
                             return;
                         }
                         
+                        if (!existingReminder) {
+                            this.vibrate();
+                        }
                         const deck = Storage.getDeck(deckId);
                         const deckName = deck ? deck.name : deckSelect.options[deckSelect.selectedIndex].dataset.name;
                         
@@ -2009,6 +2024,7 @@ const App = {
                 const reminder = reminders.find(r => r.deckId === deckId);
                 
                 if (reminder && confirm(`Supprimer le rappel pour "${reminder.deckName || 'ce deck'}" ?`)) {
+                    this.vibrate();
                     if (this.serviceWorkerRegistration && this.serviceWorkerRegistration.active) {
                         this.serviceWorkerRegistration.active.postMessage({
                             type: 'REMOVE_REMINDER',
@@ -2164,6 +2180,32 @@ const App = {
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
         return mobileRegex.test(userAgent.toLowerCase());
+    },
+    
+    // Détecter si on est sur iOS/iPhone
+    isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    },
+    
+    // Vibration de validation (pour iPhone)
+    vibrate(duration = 10) {
+        // Vérifier si on est sur iOS et si l'API de vibration est disponible
+        if (this.isIOS() && 'vibrate' in navigator) {
+            try {
+                // Sur iOS, une vibration courte (10ms) donne un feedback tactile agréable
+                navigator.vibrate(duration);
+            } catch (e) {
+                // Ignorer les erreurs si la vibration n'est pas supportée
+                console.log('Vibration non disponible:', e);
+            }
+        } else if (this.isMobile() && 'vibrate' in navigator) {
+            // Pour les autres appareils mobiles (Android), utiliser aussi la vibration
+            try {
+                navigator.vibrate(duration);
+            } catch (e) {
+                console.log('Vibration non disponible:', e);
+            }
+        }
     },
     
     // Détecter si on est sur Windows
