@@ -2284,50 +2284,65 @@ const App = {
     // Vibration de validation (pour iPhone)
     // Note: iOS Safari ne supporte pas navigator.vibrate()
     // On utilise un workaround avec un input switch qui déclenche le feedback haptique
+    // IMPORTANT: Ce hack n'est pas fiable à 100% car iOS ne permet pas officiellement
+    // les vibrations dans les PWA. Pour une solution fiable, il faut une app native.
     vibrate(duration = 10) {
-        if (this.isIOS()) {
-            // Workaround pour iOS : utiliser un input switch invisible
-            // Safari 17.4+ déclenche un feedback haptique lors du toggle d'un switch
-            try {
-                // Créer un input switch temporaire et invisible
-                const switchInput = document.createElement('input');
-                switchInput.type = 'checkbox';
-                switchInput.style.cssText = 'position: fixed; opacity: 0; pointer-events: none; width: 0; height: 0;';
-                switchInput.checked = false;
-                
-                // Ajouter au DOM
-                document.body.appendChild(switchInput);
-                
-                // Toggle pour déclencher le feedback haptique
-                setTimeout(() => {
-                    switchInput.checked = true;
-                    // Toggle immédiatement pour créer le feedback
-                    setTimeout(() => {
-                        switchInput.checked = false;
-                        // Retirer du DOM après un court délai
-                        setTimeout(() => {
-                            if (switchInput.parentNode) {
-                                switchInput.parentNode.removeChild(switchInput);
-                            }
-                        }, 100);
-                    }, 10);
-                }, 10);
-            } catch (e) {
-                // Si le workaround ne fonctionne pas, essayer navigator.vibrate (peut ne pas fonctionner)
-                if ('vibrate' in navigator) {
-                    try {
-                        navigator.vibrate(50);
-                    } catch (err) {
-                        // Ignorer
-                    }
+        const isIOS = this.isIOS();
+        
+        if (!isIOS) {
+            // Pour Android et autres appareils mobiles
+            if (this.isMobile() && 'vibrate' in navigator) {
+                try {
+                    navigator.vibrate(50);
+                } catch (e) {
+                    // Ignorer les erreurs
                 }
             }
-        } else if (this.isMobile() && 'vibrate' in navigator) {
-            // Pour Android et autres appareils mobiles
-            try {
-                navigator.vibrate(50);
-            } catch (e) {
-                // Ignorer les erreurs
+            return;
+        }
+        
+        // Workaround pour iOS : utiliser un input switch minuscule mais visible
+        // iOS déclenche plus volontiers le feedback haptique si l'élément existe visuellement
+        try {
+            // Créer un input switch temporaire, minuscule mais pas complètement invisible
+            const switchInput = document.createElement('input');
+            switchInput.type = 'checkbox';
+            // Style: minuscule, presque invisible, hors écran, mais opacity > 0 pour que iOS le reconnaisse
+            switchInput.style.cssText = `
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                opacity: 0.01;
+                left: -10px;
+                top: -10px;
+                pointer-events: none;
+            `;
+            switchInput.checked = false;
+            
+            // Ajouter au DOM
+            document.body.appendChild(switchInput);
+            
+            // Focus forcé avant le toggle pour augmenter les chances de déclencher le haptique
+            switchInput.focus();
+            
+            // Toggle pour déclencher le feedback haptique
+            // Utiliser un toggle simple plutôt que deux setTimeout
+            switchInput.checked = !switchInput.checked;
+            
+            // Retirer du DOM rapidement
+            setTimeout(() => {
+                if (switchInput.parentNode) {
+                    switchInput.remove();
+                }
+            }, 50);
+        } catch (e) {
+            // Si le workaround ne fonctionne pas, essayer navigator.vibrate (ne fonctionnera probablement pas)
+            if ('vibrate' in navigator) {
+                try {
+                    navigator.vibrate(50);
+                } catch (err) {
+                    // Ignorer silencieusement
+                }
             }
         }
     },
