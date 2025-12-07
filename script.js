@@ -1397,6 +1397,11 @@ const App = {
             backHtml += `<p class="review-text" style="color: var(--text-secondary); font-style: italic;">Aucun contenu</p>`;
         }
         
+        // Ajuster la taille du texte en fonction de la taille des images après le rendu
+        requestAnimationFrame(() => {
+            this.adjustTextSizeForImages();
+        });
+        
         // Restaurer la structure HTML si nécessaire
         const reviewCard = document.getElementById('review-card');
         const frontElement = document.getElementById('card-front');
@@ -1441,6 +1446,11 @@ const App = {
             updatedBackElement.style.transform = '';
             updatedBackElement.style.transition = '';
         }
+        
+        // Ajuster la taille du texte en fonction de la taille des images après le rendu
+        requestAnimationFrame(() => {
+            this.adjustTextSizeForImages();
+        });
         
         const reviewProgress = document.getElementById('review-progress');
         if (reviewProgress) {
@@ -2896,7 +2906,19 @@ const App = {
         if ('serviceWorker' in navigator) {
             // Utiliser un chemin relatif pour le service worker
             const swPath = './service-worker.js';
-            navigator.serviceWorker.register(swPath).catch(err => {
+            navigator.serviceWorker.register(swPath).then(registration => {
+                // Enregistrer une synchronisation périodique pour vérifier les notifications
+                if ('sync' in registration) {
+                    // Enregistrer une synchronisation toutes les heures
+                    setInterval(() => {
+                        if (registration.sync) {
+                            registration.sync.register('check-notifications').catch(() => {
+                                // Ignorer les erreurs si l'API n'est pas disponible
+                            });
+                        }
+                    }, 60 * 60 * 1000); // Toutes les heures
+                }
+            }).catch(err => {
                 // Ignorer l'erreur si on est en file:// (développement local)
                 if (window.location.protocol !== 'file:') {
                     console.error('Service Worker registration failed:', err);

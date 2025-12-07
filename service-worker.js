@@ -167,30 +167,40 @@ async function checkScheduledNotifications() {
     await initDB();
   }
   
-  if (!db) return; // Si l'init a échoué
+  if (!db) return 0; // Si l'init a échoué
   
   return new Promise((resolve) => {
     const now = Date.now();
     const transaction = db.transaction(['notifications'], 'readwrite');
     const store = transaction.objectStore('notifications');
     const index = store.index('nextNotification');
-    const range = IDBKeyRange.upperBound(now);
+    // Vérifier les notifications qui sont dues (avec une marge de 5 minutes pour éviter les problèmes de timing)
+    const range = IDBKeyRange.upperBound(now + (5 * 60 * 1000));
     
     const request = index.openCursor(range);
     const notificationsToShow = [];
     
-    request.onsuccess = (event) => {
+    request.onsuccess = async (event) => {
       const cursor = event.target.result;
       if (cursor) {
         const notification = cursor.value;
-        notificationsToShow.push(notification);
+        // Vérifier que la notification est vraiment due
+        if (notification.nextNotification <= now) {
+          notificationsToShow.push(notification);
+        }
         cursor.continue();
       } else {
         // Afficher toutes les notifications qui sont dues
-        notificationsToShow.forEach(notification => {
-          showReviewNotification(notification.deckName || 'Vos flashcards', notification.deckId);
-          scheduleNextNotification(notification);
-        });
+        for (const notification of notificationsToShow) {
+          await showReviewNotification(notification.deckName || 'Vos flashcards', notification.deckId);
+          await scheduleNextNotification(notification);
+        }
+        
+        // Reprogrammer le prochain réveil
+        if (notificationsToShow.length > 0) {
+          scheduleNextWakeUp();
+        }
+        
         resolve(notificationsToShow.length);
       }
     };
@@ -295,14 +305,9 @@ async function addReminder(deckId, deckName, intervalMinutes) {
       };
       
       const putRequest = store.put(notification);
-      putRequest.onsuccess = () => {
-        // Programmer la première notification
-        const delay = intervalMinutes * 60 * 1000;
-        if (delay > 0 && delay < 2147483647) {
-          setTimeout(() => {
-            checkScheduledNotifications();
-          }, delay);
-        }
+      putRequest.onsuccess = async () => {
+        // Reprogrammer le prochain réveil pour inclure cette nouvelle notification
+        await scheduleNextWakeUp();
         resolve();
       };
       putRequest.onerror = () => reject(putRequest.error);
@@ -372,9 +377,10 @@ async function cancelAllReminders() {
 
 // Vérifier périodiquement les notifications
 let checkInterval = null;
+let wakeUpTimeout = null;
 
 function startPeriodicCheck() {
-  // Vérifier toutes les minutes
+  // Vérifier toutes les minutes quand le service worker est actif
   if (checkInterval) {
     clearInterval(checkInterval);
   }
@@ -385,6 +391,69 @@ function startPeriodicCheck() {
   
   // Vérifier immédiatement
   checkScheduledNotifications();
+  
+  // Programmer un réveil pour vérifier les notifications même quand l'app est fermée
+  scheduleNextWakeUp();
+}
+
+// Programmer le prochain réveil pour vérifier les notifications
+async function scheduleNextWakeUp() {
+  if (!db) {
+    await initDB();
+  }
+  
+  if (!db) return;
+  
+  // Annuler le timeout précédent
+  if (wakeUpTimeout) {
+    clearTimeout(wakeUpTimeout);
+    wakeUpTimeout = null;
+  }
+  
+  // Récupérer toutes les notifications programmées
+  return new Promise((resolve) => {
+    const transaction = db.transaction(['notifications'], 'readonly');
+    const store = transaction.objectStore('notifications');
+    const index = store.index('nextNotification');
+    const request = store.getAll();
+    
+    request.onsuccess = () => {
+      const notifications = request.result || [];
+      
+      if (notifications.length === 0) {
+        resolve();
+        return;
+      }
+      
+      // Trouver la prochaine notification à afficher
+      const now = Date.now();
+      const upcomingNotifications = notifications
+        .filter(n => n.nextNotification && n.nextNotification > now)
+        .sort((a, b) => a.nextNotification - b.nextNotification);
+      
+      if (upcomingNotifications.length > 0) {
+        const nextNotification = upcomingNotifications[0];
+        const delay = nextNotification.nextNotification - now;
+        
+        // Programmer un réveil (max 24h pour éviter les problèmes)
+        const maxDelay = 24 * 60 * 60 * 1000; // 24 heures
+        const actualDelay = Math.min(delay, maxDelay);
+        
+        if (actualDelay > 0 && actualDelay < 2147483647) {
+          wakeUpTimeout = setTimeout(() => {
+            checkScheduledNotifications().then(() => {
+              // Programmer le prochain réveil
+              scheduleNextWakeUp();
+            });
+          }, actualDelay);
+        }
+      }
+      
+      resolve();
+    };
+    
+    request.onerror = () => resolve();
+  });
 }
 
 // Vérifier au démarrage et à chaque activation
@@ -392,14 +461,29 @@ self.addEventListener('activate', async (event) => {
   event.waitUntil(
     initDB().then(() => {
       startPeriodicCheck();
+      // Vérifier immédiatement les notifications dues
+      checkScheduledNotifications();
     })
   );
+});
+
+// Écouter l'événement de réveil du service worker
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'check-notifications') {
+    event.waitUntil(
+      checkScheduledNotifications().then(() => {
+        scheduleNextWakeUp();
+      })
+    );
+  }
 });
 
 // Initialiser la base de données et démarrer la vérification au chargement du service worker
 if (typeof indexedDB !== 'undefined') {
   initDB().then(() => {
     startPeriodicCheck();
+    // Vérifier immédiatement les notifications dues
+    checkScheduledNotifications();
   }).catch(err => {
     console.log('Erreur init DB au chargement:', err);
   });

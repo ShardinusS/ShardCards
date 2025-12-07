@@ -545,6 +545,9 @@ header {
 .card-list-text-with-image {
     font-size: 22px;
     line-height: 1.7;
+    text-align: center;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .card-item-content {
@@ -721,6 +724,9 @@ header {
 .review-text-with-image {
     font-size: 28px;
     line-height: 1.7;
+    text-align: center;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .review-image-container {
