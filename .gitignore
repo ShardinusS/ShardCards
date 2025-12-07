@@ -1,0 +1,20 @@
+# Dossier de fichiers qui ne doivent pas être dans le repo
+no-repo/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Fichiers de développement
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Fichiers temporaires
+*.tmp
+*.temp
