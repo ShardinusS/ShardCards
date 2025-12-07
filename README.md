@@ -46,20 +46,16 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 
 ### Étape 1 : Ouvrir dans Safari
 
-1. **Ouvrez Safari** sur votre iPhone (⚠️ **Important** : Safari uniquement, pas Chrome ou Firefox)
-2. Allez sur l'URL de l'application (par exemple : `https://votre-domaine.com`)
+1. **Ouvrez Votre navigateur** sur votre iPhone Exemple : Chrome
+2. Allez sur l'URL de l'application `https://shardinuss.github.io/flashcards-app/`
 
 ### Étape 2 : Ajouter à l'écran d'accueil
 
-1. **Appuyez sur le bouton de partage** (carré avec flèche vers le haut) en bas de l'écran
-   - Sur iPhone avec Face ID : en bas au centre
-   - Sur iPhone avec Touch ID : en bas à droite
+1. **Appuyez sur le bouton de partage** (carré avec flèche vers le haut) en haut a droite de l'écran
 
 2. **Faites défiler le menu** vers le bas jusqu'à voir **"Sur l'écran d'accueil"** ou **"Ajouter à l'écran d'accueil"**
 
 3. **Appuyez sur "Sur l'écran d'accueil"**
-
-4. **Personnalisez le nom** si vous le souhaitez (par défaut : "ShardCards")
 
 5. **Appuyez sur "Ajouter"** en haut à droite
 
@@ -77,7 +73,8 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 ### Étape 1 : Ouvrir dans Chrome
 
 1. **Ouvrez Chrome** sur votre téléphone Android
-2. Allez sur l'URL de l'application
+
+2. Allez sur l'URL de l'application `https://shardinuss.github.io/flashcards-app/`
 
 ### Étape 2 : Installer l'application
 
@@ -172,18 +169,6 @@ ShardCards utilise l'algorithme SM-2 (SuperMemo 2), un des algorithmes de répé
 - **Bien** : L'intervalle augmente selon un facteur d'aisance (ease factor)
 - **Facile** : L'intervalle augmente plus rapidement
 
-### Exemple de progression
-
-```
-Jour 1  : Révision initiale → "Bien" → Prochaine révision : Jour 2
-Jour 2  : Révision → "Bien" → Prochaine révision : Jour 5
-Jour 5  : Révision → "Bien" → Prochaine révision : Jour 12
-Jour 12 : Révision → "Bien" → Prochaine révision : Jour 25
-...
-```
-
----
-
 ## 📦 Import / Export de Decks
 
 ### Format JSON
@@ -209,6 +194,7 @@ ShardCards utilise un format JSON simple et lisible :
   ]
 }
 ```
+Les Images des cartes sont stockées dans le JSON en base64 pour etre totalement portables.
 
 ### Exporter un deck
 
@@ -223,67 +209,6 @@ ShardCards utilise un format JSON simple et lisible :
 2. Sélectionnez un fichier JSON au format décrit ci-dessus
 3. Le deck sera créé avec toutes les cartes importées
 4. Les métadonnées de révision seront réinitialisées pour les nouvelles cartes
-
----
-
-## 🚀 Hébergement et Déploiement
-
-### Option 1 : GitHub Pages (Gratuit)
-
-1. **Créer un dépôt GitHub**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/votre-username/shardcards.git
-   git push -u origin main
-   ```
-
-2. **Activer GitHub Pages**
-   - Allez dans Settings > Pages
-   - Sélectionnez la branche `main` et le dossier `/ (root)`
-   - L'application sera disponible à `https://votre-username.github.io/shardcards/`
-
-### Option 2 : Netlify (Gratuit)
-
-1. **Via l'interface web**
-   - Allez sur [netlify.com](https://netlify.com)
-   - Glissez-déposez le dossier du projet
-   - L'application sera déployée automatiquement
-
-2. **Via Netlify CLI**
-   ```bash
-   npm install -g netlify-cli
-   netlify deploy --prod
-   ```
-
-### Option 3 : Vercel (Gratuit)
-
-1. **Via l'interface web**
-   - Allez sur [vercel.com](https://vercel.com)
-   - Importez votre dépôt GitHub
-   - Vercel détectera automatiquement le projet
-
-2. **Via Vercel CLI**
-   ```bash
-   npm install -g vercel
-   vercel --prod
-   ```
-
-### Option 4 : Serveur local (Développement)
-
-```bash
-# Avec Python 3
-python -m http.server 8000
-
-# Avec Node.js (http-server)
-npx http-server -p 8000
-
-# Avec PHP
-php -S localhost:8000
-```
-
-Puis ouvrez `http://localhost:8000` dans votre navigateur.
 
 ---
 
@@ -304,55 +229,6 @@ Puis ouvrez `http://localhost:8000` dans votre navigateur.
 │   └── Chapitre 4 - Loi binomiale.json
 └── README.md          # Ce fichier
 ```
-
----
-
-## 🐛 Dépannage
-
-### L'application ne s'installe pas sur iPhone
-
-- ✅ Vérifiez que vous utilisez **Safari** (pas Chrome ou Firefox)
-- ✅ Assurez-vous que l'application est servie en **HTTPS** (obligatoire pour PWA)
-- ✅ Vérifiez que `manifest.json` est accessible
-- ✅ Essayez de vider le cache de Safari et recharger la page
-
-### Les notifications ne fonctionnent pas
-
-- ✅ Autorisez les notifications dans les paramètres de votre navigateur/appareil
-- ✅ Sur iOS : Allez dans Réglages > Safari > Notifications
-- ✅ Sur Android : Allez dans Paramètres > Applications > Chrome > Notifications
-- ✅ Assurez-vous que l'application est installée en tant que PWA
-
-### Le Service Worker ne fonctionne pas
-
-- ✅ Vérifiez la console du navigateur pour les erreurs (F12)
-- ✅ Assurez-vous que l'application est servie depuis un serveur (pas `file://`)
-- ✅ Videz le cache du navigateur et rechargez
-- ✅ Vérifiez que vous êtes en HTTPS (ou localhost pour le développement)
-
-### Les données ne persistent pas
-
-- ✅ Vérifiez que LocalStorage est activé dans votre navigateur
-- ✅ Ne naviguez pas en mode privé (LocalStorage peut être désactivé)
-- ✅ Vérifiez que vous n'avez pas désactivé les cookies/localStorage
-
-### L'application ne fonctionne pas hors ligne
-
-- ✅ Visitez l'application au moins une fois en ligne pour que le cache soit créé
-- ✅ Vérifiez que le Service Worker est bien enregistré (F12 > Application > Service Workers)
-- ✅ Assurez-vous que vous avez autorisé le stockage
-
----
-
-## 📝 Notes Techniques
-
-- **Framework** : Vanilla JavaScript (pas de dépendances externes)
-- **Stockage** : LocalStorage + IndexedDB (pour les notifications)
-- **Algorithme** : SM-2 (SuperMemo 2)
-- **Compatibilité** : Navigateurs modernes (Chrome, Safari, Firefox, Edge)
-- **Responsive** : Optimisé pour mobile, tablette et desktop
-- **PWA** : Service Worker pour le mode hors ligne et les notifications
-- **Notifications** : Background Sync et Periodic Background Sync pour iOS et Android
 
 ---
 
@@ -377,7 +253,7 @@ Puis ouvrez `http://localhost:8000` dans votre navigateur.
 
 ## 📄 Licence
 
-Libre d'utilisation pour usage personnel et commercial.
+Libre d'utilisation pour usage personnel.
 
 ---
 
