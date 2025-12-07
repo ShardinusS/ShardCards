@@ -1,4 +1,6 @@
-# 🎴 ShardCards - Application de Flashcards Illimitée et Gratuite
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+# <i class="fa-solid fa-cards-blank"></i> ShardCards - Application de Flashcards Illimitée et Gratuite
 
 <div align="center">
 
@@ -12,11 +14,13 @@
 
 </div>
 
+> **Note** : Les icônes Font Awesome utilisées dans ce README s'afficheront correctement dans les visualiseurs Markdown qui supportent HTML et le chargement de ressources externes. Sur GitHub, certaines icônes peuvent ne pas s'afficher pour des raisons de sécurité.
+
 ---
 
-## 🌟 Pourquoi ShardCards ?
+## <i class="fa-solid fa-star"></i> Pourquoi ShardCards ?
 
-### ❌ Les autres applications vous limitent...
+### <i class="fa-solid fa-xmark"></i> Les autres applications vous limitent...
 
 La plupart des applications de flashcards sur le marché vous imposent des limitations frustrantes :
 - **Limite de cartes** : "Vous avez atteint votre limite de 50 cartes. Passez Premium pour continuer !"
@@ -25,24 +29,24 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 - **Fonctionnalités premium** : Les meilleures fonctionnalités sont payantes
 - **Dépendance au cloud** : Vos données sont stockées sur leurs serveurs
 
-### ✅ ShardCards est 100% illimité et gratuit !
+### <i class="fa-solid fa-check"></i> ShardCards est 100% illimité et gratuit !
 
 **Aucune limite, aucun abonnement, aucune publicité.**
 
-- ✅ **Cartes illimitées** : Créez autant de decks et de cartes que vous voulez
-- ✅ **100% gratuit** : Aucun abonnement, aucune publicité
-- ✅ **Fonctionnalités complètes** : Toutes les fonctionnalités sont disponibles gratuitement
-- ✅ **Vos données, votre contrôle** : Tout est stocké localement sur votre appareil
-- ✅ **Fonctionne hors ligne** : Réviser même sans connexion internet
-- ✅ **Notifications de rappel** : Rappels personnalisables pour ne jamais oublier de réviser
-- ✅ **Images sur les cartes** : Ajoutez des images à vos cartes pour un apprentissage visuel
-- ✅ **Répétition espacée intelligente** : Algorithme SM-2 pour optimiser votre mémorisation
+- <i class="fa-solid fa-check"></i> **Cartes illimitées** : Créez autant de decks et de cartes que vous voulez
+- <i class="fa-solid fa-check"></i> **100% gratuit** : Aucun abonnement, aucune publicité
+- <i class="fa-solid fa-check"></i> **Fonctionnalités complètes** : Toutes les fonctionnalités sont disponibles gratuitement
+- <i class="fa-solid fa-check"></i> **Vos données, votre contrôle** : Tout est stocké localement sur votre appareil
+- <i class="fa-solid fa-check"></i> **Fonctionne hors ligne** : Réviser même sans connexion internet
+- <i class="fa-solid fa-check"></i> **Notifications de rappel** : Rappels personnalisables pour ne jamais oublier de réviser
+- <i class="fa-solid fa-check"></i> **Images sur les cartes** : Ajoutez des images à vos cartes pour un apprentissage visuel
+- <i class="fa-solid fa-check"></i> **Répétition espacée intelligente** : Algorithme SM-2 pour optimiser votre mémorisation
 
 **Il vous suffit de l'installer sur votre écran d'accueil en tant que PWA (Progressive Web App) pour profiter de toutes ces fonctionnalités !**
 
 ---
 
-## 📱 Installation sur iPhone (iOS)
+## <i class="fa-solid fa-mobile-screen-button"></i> Installation sur iPhone (iOS)
 
 ### Étape 1 : Ouvrir dans Safari
 
@@ -61,18 +65,18 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 
 ### Étape 3 : Profiter de l'application
 
-✅ L'icône **ShardCards** apparaît maintenant sur votre écran d'accueil  
-✅ L'application s'ouvre comme une application native (sans barre d'adresse Safari)  
-✅ Fonctionne hors ligne après la première visite  
-✅ Toutes les fonctionnalités sont disponibles gratuitement et sans limite
+<i class="fa-solid fa-check"></i> L'icône **ShardCards** apparaît maintenant sur votre écran d'accueil  
+<i class="fa-solid fa-check"></i> L'application s'ouvre comme une application native (sans barre d'adresse Safari)  
+<i class="fa-solid fa-check"></i> Fonctionne hors ligne après la première visite  
+<i class="fa-solid fa-check"></i> Toutes les fonctionnalités sont disponibles gratuitement et sans limite
 
 ---
 
-## 🤖 Installation sur Android
+## <i class="fa-brands fa-android"></i> Installation sur Android
 
-### Étape 1 : Ouvrir dans Chrome
+### Étape 1 : Ouvrir dans votre navigateur
 
-1. **Ouvrez Chrome** sur votre téléphone Android
+1. **Ouvrez votre navigateur** sur votre téléphone Android
 
 2. Allez sur l'URL de l'application `https://shardinuss.github.io/flashcards-app/`
 
@@ -88,78 +92,78 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 
 ### Étape 3 : Profiter de l'application
 
-✅ L'icône **ShardCards** apparaît sur votre écran d'accueil  
-✅ L'application s'ouvre comme une application native  
-✅ Fonctionne hors ligne  
-✅ Notifications de rappel fonctionnent même quand l'app est fermée
+<i class="fa-solid fa-check"></i> L'icône **ShardCards** apparaît sur votre écran d'accueil  
+<i class="fa-solid fa-check"></i> L'application s'ouvre comme une application native  
+<i class="fa-solid fa-check"></i> Fonctionne hors ligne  
+<i class="fa-solid fa-check"></i> Notifications de rappel fonctionnent même quand l'app est fermée
 
 ---
 
-## 🎯 Fonctionnalités Complètes
+## <i class="fa-solid fa-bullseye"></i> Fonctionnalités Complètes
 
-### 📚 Gestion des Decks
+### <i class="fa-solid fa-book"></i> Gestion des Decks
 
-- ✅ **Créer des decks illimités** : Organisez vos cartes par thème, matière, ou sujet
-- ✅ **Renommer et supprimer** : Gérez facilement vos decks
-- ✅ **Affichage en grille ou liste** : Choisissez votre mode d'affichage préféré
-- ✅ **Compteur de cartes à réviser** : Voyez d'un coup d'œil combien de cartes nécessitent une révision
-- ✅ **Decks de base inclus** : Des decks prêts à l'emploi pour commencer
+- <i class="fa-solid fa-check"></i> **Créer des decks illimités** : Organisez vos cartes par thème, matière, ou sujet
+- <i class="fa-solid fa-check"></i> **Renommer et supprimer** : Gérez facilement vos decks
+- <i class="fa-solid fa-check"></i> **Affichage en grille ou liste** : Choisissez votre mode d'affichage préféré
+- <i class="fa-solid fa-check"></i> **Compteur de cartes à réviser** : Voyez d'un coup d'œil combien de cartes nécessitent une révision
+- <i class="fa-solid fa-check"></i> **Decks de base inclus** : Des decks prêts à l'emploi pour commencer
 
-### 🎴 Gestion des Cartes
+### <i class="fa-solid fa-cards-blank"></i> Gestion des Cartes
 
-- ✅ **Cartes illimitées** : Créez autant de cartes que vous voulez dans chaque deck
-- ✅ **Texte et images** : Ajoutez du texte et des images à vos cartes
+- <i class="fa-solid fa-check"></i> **Cartes illimitées** : Créez autant de cartes que vous voulez dans chaque deck
+- <i class="fa-solid fa-check"></i> **Texte et images** : Ajoutez du texte et des images à vos cartes
   - Texte sur le recto et/ou verso
   - Images sur le recto et/ou verso
   - Combinaison texte + image
-- ✅ **Modification facile** : Modifiez ou supprimez vos cartes à tout moment
-- ✅ **Import/Export JSON** : Importez ou exportez vos decks pour les sauvegarder ou les partager
+- <i class="fa-solid fa-check"></i> **Modification facile** : Modifiez ou supprimez vos cartes à tout moment
+- <i class="fa-solid fa-check"></i> **Import/Export JSON** : Importez ou exportez vos decks pour les sauvegarder ou les partager
 
-### 🧠 Système de Révision Intelligent
+### <i class="fa-solid fa-brain"></i> Système de Révision Intelligent
 
-- ✅ **Répétition espacée (SM-2)** : Algorithme scientifique pour optimiser votre mémorisation
-- ✅ **Trois niveaux de difficulté** :
+- <i class="fa-solid fa-check"></i> **Répétition espacée (SM-2)** : Algorithme scientifique pour optimiser votre mémorisation
+- <i class="fa-solid fa-check"></i> **Trois niveaux de difficulté** :
   - **Encore** : Réinitialise la carte (révision dans 1 jour)
   - **Bien** : Augmente l'intervalle selon votre facilité
   - **Facile** : Augmente l'intervalle plus rapidement
-- ✅ **Interface intuitive** : Tapez sur la carte pour révéler la réponse
-- ✅ **Compteur de progression** : Suivez votre avancement en temps réel
-- ✅ **Configuration du nombre de cartes** : Choisissez combien de cartes réviser par session
+- <i class="fa-solid fa-check"></i> **Interface intuitive** : Tapez sur la carte pour révéler la réponse
+- <i class="fa-solid fa-check"></i> **Compteur de progression** : Suivez votre avancement en temps réel
+- <i class="fa-solid fa-check"></i> **Configuration du nombre de cartes** : Choisissez combien de cartes réviser par session
 
-### 🔔 Rappels de Révision
+### <i class="fa-solid fa-bell"></i> Rappels de Révision
 
-- ✅ **Rappels personnalisables** : Configurez des rappels pour chaque deck
-- ✅ **Intervalles personnalisables** : Choisissez la fréquence de vos rappels (toutes les heures, tous les jours, etc.)
-- ✅ **Notifications même app fermée** : Les rappels fonctionnent même quand l'application est fermée (iOS et Android)
-- ✅ **Notifications natives** : Intégration complète avec le système de notifications de votre appareil
+- <i class="fa-solid fa-check"></i> **Rappels personnalisables** : Configurez des rappels pour chaque deck
+- <i class="fa-solid fa-check"></i> **Intervalles personnalisables** : Choisissez la fréquence de vos rappels (toutes les heures, tous les jours, etc.)
+- <i class="fa-solid fa-check"></i> **Notifications même app fermée** : Les rappels fonctionnent même quand l'application est fermée (iOS et Android)
+- <i class="fa-solid fa-check"></i> **Notifications natives** : Intégration complète avec le système de notifications de votre appareil
 
-### 🎨 Interface Moderne
+### <i class="fa-solid fa-palette"></i> Interface Moderne
 
-- ✅ **Design épuré** : Interface moderne et intuitive
-- ✅ **Responsive** : Optimisé pour mobile, tablette et desktop
-- ✅ **Animations fluides** : Transitions douces pour une expérience agréable
-- ✅ **Thème clair** : Interface claire et lisible
-- ✅ **Accessibilité** : Conçue pour être facile à utiliser
+- <i class="fa-solid fa-check"></i> **Design épuré** : Interface moderne et intuitive
+- <i class="fa-solid fa-check"></i> **Responsive** : Optimisé pour mobile, tablette et desktop
+- <i class="fa-solid fa-check"></i> **Animations fluides** : Transitions douces pour une expérience agréable
+- <i class="fa-solid fa-check"></i> **Thème clair** : Interface claire et lisible
+- <i class="fa-solid fa-check"></i> **Accessibilité** : Conçue pour être facile à utiliser
 
-### 💾 Stockage et Synchronisation
+### <i class="fa-solid fa-floppy-disk"></i> Stockage et Synchronisation
 
-- ✅ **Stockage local** : Toutes vos données sont stockées sur votre appareil
-- ✅ **Pas de cloud requis** : Fonctionne entièrement hors ligne
-- ✅ **Export/Import** : Sauvegardez et partagez vos decks en format JSON
-- ✅ **Sécurité** : Vos données restent privées sur votre appareil
+- <i class="fa-solid fa-check"></i> **Stockage local** : Toutes vos données sont stockées sur votre appareil
+- <i class="fa-solid fa-check"></i> **Pas de cloud requis** : Fonctionne entièrement hors ligne
+- <i class="fa-solid fa-check"></i> **Export/Import** : Sauvegardez et partagez vos decks en format JSON
+- <i class="fa-solid fa-check"></i> **Sécurité** : Vos données restent privées sur votre appareil
 
 ---
 
-## 🔄 Comment fonctionne la Répétition Espacée (SM-2) ?
+## <i class="fa-solid fa-rotate"></i> Comment fonctionne la Répétition Espacée (SM-2) ?
 
 La répétition espacée est une technique d'apprentissage scientifiquement prouvée qui augmente l'efficacité de la mémorisation.
 
 ### Principe
 
 Plus vous connaissez bien une carte, plus l'intervalle entre les révisions augmente. Cela permet de :
-- ✅ **Optimiser votre temps** : Vous révisez moins souvent les cartes que vous connaissez bien
-- ✅ **Renforcer la mémoire** : Les cartes difficiles sont révisées plus souvent
-- ✅ **Mémorisation à long terme** : Les intervalles croissants favorisent la mémorisation durable
+- <i class="fa-solid fa-check"></i> **Optimiser votre temps** : Vous révisez moins souvent les cartes que vous connaissez bien
+- <i class="fa-solid fa-check"></i> **Renforcer la mémoire** : Les cartes difficiles sont révisées plus souvent
+- <i class="fa-solid fa-check"></i> **Mémorisation à long terme** : Les intervalles croissants favorisent la mémorisation durable
 
 ### Algorithme SM-2
 
@@ -169,7 +173,7 @@ ShardCards utilise l'algorithme SM-2 (SuperMemo 2), un des algorithmes de répé
 - **Bien** : L'intervalle augmente selon un facteur d'aisance (ease factor)
 - **Facile** : L'intervalle augmente plus rapidement
 
-## 📦 Import / Export de Decks
+## <i class="fa-solid fa-box"></i> Import / Export de Decks
 
 ### Format JSON
 
@@ -199,20 +203,20 @@ Les Images des cartes sont stockées dans le JSON en base64 pour etre totalement
 ### Exporter un deck
 
 1. Ouvrez le deck que vous souhaitez exporter
-2. Cliquez sur le bouton **⬆** (Exporter) dans l'en-tête
+2. Cliquez sur le bouton <i class="fa-solid fa-arrow-up"></i> (Exporter) dans l'en-tête
 3. Le fichier JSON sera téléchargé automatiquement
 4. Le nom du fichier sera basé sur le nom du deck
 
 ### Importer un deck
 
-1. Cliquez sur le bouton **⬇** (Importer) dans l'en-tête d'un deck
+1. Cliquez sur le bouton <i class="fa-solid fa-arrow-down"></i> (Importer) dans l'en-tête d'un deck
 2. Sélectionnez un fichier JSON au format décrit ci-dessus
 3. Le deck sera créé avec toutes les cartes importées
 4. Les métadonnées de révision seront réinitialisées pour les nouvelles cartes
 
 ---
 
-## 🛠️ Structure du Projet
+## <i class="fa-solid fa-screwdriver-wrench"></i> Structure du Projet
 
 ```
 .
@@ -232,7 +236,7 @@ Les Images des cartes sont stockées dans le JSON en base64 pour etre totalement
 
 ---
 
-## 🎓 Conseils d'Utilisation
+## <i class="fa-solid fa-graduation-cap"></i> Conseils d'Utilisation
 
 ### Pour une mémorisation optimale
 
@@ -251,13 +255,13 @@ Les Images des cartes sont stockées dans le JSON en base64 pour etre totalement
 
 ---
 
-## 📄 Licence
+## <i class="fa-solid fa-file-lines"></i> Licence
 
 Libre d'utilisation pour usage personnel.
 
 ---
 
-## 🙏 Remerciements
+## <i class="fa-solid fa-hands-praying"></i> Remerciements
 
 ShardCards est une application open-source créée pour offrir une alternative gratuite et illimitée aux applications de flashcards payantes.
 
@@ -267,7 +271,7 @@ ShardCards est une application open-source créée pour offrir une alternative g
 
 <div align="center">
 
-**Bon apprentissage ! 🎓**
+**Bon apprentissage ! <i class="fa-solid fa-graduation-cap"></i>**
 
 *ShardCards - L'application de flashcards 100% gratuite et illimitée*
 
