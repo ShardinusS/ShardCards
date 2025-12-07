@@ -1,4 +1,4 @@
-# 🎴 ShardCards - Application de Flashcards Illimitée et Gratuite
+# 📚 ShardCards - Application de Flashcards Illimitée et Gratuite
 
 <div align="center">
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 🌟 Pourquoi ShardCards ?
+## ⭐ Pourquoi ShardCards ?
 
 ### ❌ Les autres applications vous limitent...
 
@@ -61,18 +61,18 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 
 ### Étape 3 : Profiter de l'application
 
-✅ L'icône **ShardCards** apparaît maintenant sur votre écran d'accueil  
-✅ L'application s'ouvre comme une application native (sans barre d'adresse Safari)  
-✅ Fonctionne hors ligne après la première visite  
-✅ Toutes les fonctionnalités sont disponibles gratuitement et sans limite
+<i class="fa-solid fa-check"></i> L'icône **ShardCards** apparaît maintenant sur votre écran d'accueil  
+<i class="fa-solid fa-check"></i> L'application s'ouvre comme une application native (sans barre d'adresse Safari)  
+<i class="fa-solid fa-check"></i> Fonctionne hors ligne après la première visite  
+<i class="fa-solid fa-check"></i> Toutes les fonctionnalités sont disponibles gratuitement et sans limite
 
 ---
 
 ## 🤖 Installation sur Android
 
-### Étape 1 : Ouvrir dans Chrome
+### Étape 1 : Ouvrir dans votre navigateur
 
-1. **Ouvrez Chrome** sur votre téléphone Android
+1. **Ouvrez votre navigateur** sur votre téléphone Android
 
 2. Allez sur l'URL de l'application `https://shardinuss.github.io/flashcards-app/`
 
@@ -88,10 +88,10 @@ La plupart des applications de flashcards sur le marché vous imposent des limit
 
 ### Étape 3 : Profiter de l'application
 
-✅ L'icône **ShardCards** apparaît sur votre écran d'accueil  
-✅ L'application s'ouvre comme une application native  
-✅ Fonctionne hors ligne  
-✅ Notifications de rappel fonctionnent même quand l'app est fermée
+<i class="fa-solid fa-check"></i> L'icône **ShardCards** apparaît sur votre écran d'accueil  
+<i class="fa-solid fa-check"></i> L'application s'ouvre comme une application native  
+<i class="fa-solid fa-check"></i> Fonctionne hors ligne  
+<i class="fa-solid fa-check"></i> Notifications de rappel fonctionnent même quand l'app est fermée
 
 ---
 

@@ -286,6 +286,9 @@ const App = {
             this.restoreReviewReminders();
         }
         
+        // Vérifier et tester les notifications au démarrage
+        this.testNotificationsOnStart();
+        
         // Afficher le popup d'aide lors de la première visite
         this.checkFirstVisit();
         
@@ -2765,6 +2768,14 @@ const App = {
                     <span>Ajouter le rappel</span>
                 </button>
                 
+                <div style="margin-top: 20px; padding: 15px; background: var(--surface); border-radius: 12px; border: 2px solid var(--border);">
+                    <h4 style="margin: 0 0 10px 0; font-size: 16px; color: var(--text-primary);">Tester les notifications</h4>
+                    <p style="margin: 0 0 15px 0; font-size: 14px; color: var(--text-secondary);">Cliquez sur le bouton ci-dessous pour tester si les notifications fonctionnent sur votre appareil.</p>
+                    <button type="button" id="test-notification-btn" class="btn btn-primary" style="width: 100%;">
+                        <span>🔔 Tester une notification maintenant</span>
+                    </button>
+                </div>
+                
                 <div class="reminders-section">
                     <div class="reminders-section-header">
                         <h3 class="reminders-title">
@@ -2796,6 +2807,17 @@ const App = {
         this.showModalWithContent('Rappels de révision', content);
         
         requestAnimationFrame(() => {
+            // Event listener pour tester les notifications
+            const testNotificationBtn = document.getElementById('test-notification-btn');
+            if (testNotificationBtn) {
+                testNotificationBtn.addEventListener('click', async () => {
+                    await this.testNotificationNow();
+                });
+                console.log('✅ Bouton de test de notification attaché');
+            } else {
+                console.warn('⚠️ Bouton de test de notification non trouvé');
+            }
+            
             // Gérer l'affichage du champ personnalisé
             const intervalSelect = document.getElementById('reminder-interval-select');
             const customIntervalContainer = document.getElementById('custom-interval-container');
@@ -2861,26 +2883,35 @@ const App = {
                     localStorage.setItem('flashcards_reminders', JSON.stringify(savedReminders));
                     
                     // Demander la permission de notification si nécessaire
-                    this.requestNotificationPermission().then(() => {
+                    this.requestNotificationPermission().then(async () => {
                         // Envoyer un message au service worker pour ajouter/mettre à jour le rappel
                         if ('serviceWorker' in navigator) {
-                            navigator.serviceWorker.ready.then(registration => {
+                            try {
+                                const registration = await navigator.serviceWorker.ready;
                                 const deck = decks.find(d => d.id === deckId);
                                 const deckName = deck ? deck.name : 'Deck';
                                 
-                                if (registration.active) {
-                                    registration.active.postMessage({
+                                // Utiliser le service worker actif ou en attente
+                                const worker = registration.active || registration.waiting || registration.installing;
+                                
+                                if (worker) {
+                                    worker.postMessage({
                                         type: 'ADD_REMINDER',
                                         deckId: deckId,
                                         deckName: deckName,
                                         intervalMinutes: intervalMinutes
                                     });
+                                    console.log('✅ Rappel envoyé au service worker:', deckName, intervalMinutes, 'minutes');
+                                } else {
+                                    console.warn('⚠️ Aucun service worker disponible');
                                 }
-                            });
+                            } catch (error) {
+                                console.error('❌ Erreur lors de l\'envoi du rappel au service worker:', error);
+                            }
                         }
                     }).catch(() => {
                         // Permission refusée, mais on sauvegarde quand même dans localStorage
-                        console.log('Permission de notification refusée');
+                        console.log('⚠️ Permission de notification refusée');
                     });
                     
                     // Recharger la modale pour afficher les changements
@@ -2888,7 +2919,7 @@ const App = {
                 });
             }
             
-            // Event listeners pour supprimer les rappels
+            // Event listeners pour supprimer les rappels (déjà attaché plus haut, mais on le garde pour compatibilité)
             document.querySelectorAll('.btn-remove-reminder').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const index = parseInt(e.target.getAttribute('data-reminder-index'));
@@ -2936,34 +2967,55 @@ const App = {
     
     async requestNotificationPermission() {
         if (!('Notification' in window)) {
-            console.log('Les notifications ne sont pas supportées par ce navigateur.');
+            console.log('⚠️ Les notifications ne sont pas supportées par ce navigateur.');
             return Promise.resolve();
         }
         
         if (Notification.permission === 'granted') {
+            console.log('✅ Permissions de notifications déjà accordées');
             // Vérifier aussi la permission Periodic Background Sync si disponible
             await this.requestPeriodicSyncPermission();
             return Promise.resolve();
         }
         
         if (Notification.permission === 'denied') {
-            alert('Les notifications ont été bloquées. Veuillez les autoriser dans les paramètres de votre navigateur pour recevoir les rappels de révision.');
+            alert('Les notifications ont été bloquées. Veuillez les autoriser dans les paramètres de votre navigateur/appareil pour recevoir les rappels de révision.\n\nSur iOS : Réglages > Safari > Notifications\nSur Android : Paramètres > Applications > Chrome > Notifications');
             return Promise.reject();
         }
         
         // Demander la permission
         try {
+            console.log('📱 Demande de permission de notifications...');
             const permission = await Notification.requestPermission();
+            console.log('📱 Permission de notifications:', permission);
+            
             if (permission === 'granted') {
+                console.log('✅ Permissions de notifications accordées !');
                 // Demander aussi la permission Periodic Background Sync
                 await this.requestPeriodicSyncPermission();
+                
+                // Tester l'affichage d'une notification
+                if ('serviceWorker' in navigator) {
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        await registration.showNotification('Notifications activées !', {
+                            body: 'Vous recevrez maintenant des rappels pour vos révisions.',
+                            icon: './icon-1024.png',
+                            tag: 'test-notification',
+                            silent: false
+                        });
+                    } catch (error) {
+                        console.log('Note: Notification de test non affichée (normal si service worker pas encore prêt)');
+                    }
+                }
+                
                 return Promise.resolve();
             } else {
                 alert('Les notifications sont nécessaires pour recevoir les rappels de révision. Veuillez les autoriser.');
                 return Promise.reject();
             }
         } catch (error) {
-            console.error('Erreur lors de la demande de permission:', error);
+            console.error('❌ Erreur lors de la demande de permission:', error);
             return Promise.reject();
         }
     },
@@ -2996,6 +3048,83 @@ const App = {
             } catch (error) {
                 console.log('Erreur lors de la demande de permission Periodic Sync:', error);
             }
+        }
+    },
+    
+    async testNotificationsOnStart() {
+        // Tester les notifications au démarrage si les permissions sont accordées
+        if ('Notification' in window && Notification.permission === 'granted') {
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    // Vérifier que le service worker peut afficher des notifications
+                    console.log('✅ Permissions de notifications actives, service worker prêt');
+                } catch (error) {
+                    console.log('⚠️ Service worker pas encore prêt:', error);
+                }
+            }
+        }
+    },
+    
+    async testNotificationNow() {
+        // Tester l'affichage d'une notification immédiatement
+        console.log('🧪 Test de notification...');
+        
+        if (!('Notification' in window)) {
+            alert('Les notifications ne sont pas supportées par votre navigateur.');
+            return;
+        }
+        
+        if (Notification.permission !== 'granted') {
+            alert('Les notifications ne sont pas autorisées. Veuillez autoriser les notifications dans les paramètres de votre navigateur.');
+            return;
+        }
+        
+        if (!('serviceWorker' in navigator)) {
+            alert('Le service worker n\'est pas disponible. Les notifications ne peuvent pas fonctionner.');
+            return;
+        }
+        
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            
+            if (!registration.showNotification) {
+                alert('Le service worker ne peut pas afficher de notifications.');
+                return;
+            }
+            
+            // Afficher une notification de test
+            await registration.showNotification('Test de notification ShardCards', {
+                body: 'Si vous voyez cette notification, les rappels fonctionneront correctement !',
+                icon: './icon-1024.png',
+                badge: './icon-1024.png',
+                tag: 'test-notification-' + Date.now(),
+                requireInteraction: false,
+                silent: false,
+                vibrate: [200, 100, 200],
+                data: {
+                    url: './index.html',
+                    test: true
+                },
+                actions: [
+                    {
+                        action: 'test-ok',
+                        title: 'OK'
+                    }
+                ]
+            });
+            
+            console.log('✅ Notification de test envoyée avec succès !');
+            
+            // Attendre un peu avant d'afficher l'alerte pour laisser la notification s'afficher
+            setTimeout(() => {
+                alert('✅ Notification de test envoyée !\n\nSi vous ne la voyez pas :\n1. Vérifiez les paramètres de notifications de votre navigateur\n2. Vérifiez que les notifications ne sont pas en mode "Ne pas déranger"\n3. Regardez dans la barre de notifications de votre système');
+            }, 500);
+            
+        } catch (error) {
+            console.error('❌ Erreur lors du test de notification:', error);
+            console.error('Détails:', error.stack);
+            alert('❌ Erreur lors du test de notification :\n\n' + error.message + '\n\nVérifiez la console pour plus de détails (F12 > Console).');
         }
     },
     

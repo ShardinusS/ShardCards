@@ -167,7 +167,10 @@ async function checkScheduledNotifications() {
     await initDB();
   }
   
-  if (!db) return 0; // Si l'init a échoué
+  if (!db) {
+    console.log('⚠️ Base de données non initialisée');
+    return 0;
+  }
   
   return new Promise((resolve) => {
     const now = Date.now();
@@ -187,17 +190,23 @@ async function checkScheduledNotifications() {
         // Vérifier que la notification est vraiment due
         if (notification.nextNotification <= now) {
           notificationsToShow.push(notification);
+          console.log('📬 Notification due trouvée:', notification.deckName, new Date(notification.nextNotification).toLocaleString());
         }
         cursor.continue();
       } else {
         // Afficher toutes les notifications qui sont dues
-        for (const notification of notificationsToShow) {
-          await showReviewNotification(notification.deckName || 'Vos flashcards', notification.deckId);
-          await scheduleNextNotification(notification);
-        }
-        
-        // Reprogrammer le prochain réveil
         if (notificationsToShow.length > 0) {
+          console.log(`📬 ${notificationsToShow.length} notification(s) à afficher`);
+          for (const notification of notificationsToShow) {
+            try {
+              await showReviewNotification(notification.deckName || 'Vos flashcards', notification.deckId);
+              await scheduleNextNotification(notification);
+            } catch (error) {
+              console.error('❌ Erreur lors de l\'affichage de la notification:', error);
+            }
+          }
+          
+          // Reprogrammer le prochain réveil
           scheduleNextWakeUp();
         }
         
@@ -205,7 +214,8 @@ async function checkScheduledNotifications() {
       }
     };
     
-    request.onerror = () => {
+    request.onerror = (error) => {
+      console.error('❌ Erreur lors de la vérification des notifications:', error);
       resolve(0);
     };
   });
@@ -243,37 +253,65 @@ async function scheduleNextNotification(notification) {
 
 // Écouter les messages du client
 self.addEventListener('message', async (event) => {
+  console.log('📨 Message reçu dans le service worker:', event.data);
+  
   if (!db) {
     await initDB();
   }
   
-  if (event.data && event.data.type === 'ADD_REMINDER') {
-    const { deckId, deckName, intervalMinutes } = event.data;
-    await addReminder(deckId, deckName, intervalMinutes);
-  } else if (event.data && event.data.type === 'REMOVE_REMINDER') {
-    const { deckId } = event.data;
-    await removeReminder(deckId);
-  } else if (event.data && event.data.type === 'UPDATE_REMINDERS') {
-    // Synchroniser tous les rappels (pour compatibilité)
-    const { reminders } = event.data;
-    if (reminders && Array.isArray(reminders)) {
-      // Supprimer tous les rappels existants
-      await cancelAllReminders();
-      // Ajouter les nouveaux rappels
-      for (const reminder of reminders) {
-        await addReminder(reminder.deckId, reminder.deckName || 'Deck', reminder.intervalMinutes);
+  if (!event.data || !event.data.type) {
+    console.warn('⚠️ Message sans type reçu');
+    return;
+  }
+  
+  try {
+    if (event.data.type === 'ADD_REMINDER') {
+      const { deckId, deckName, intervalMinutes } = event.data;
+      console.log('➕ Ajout d\'un rappel:', deckName, intervalMinutes, 'minutes');
+      await addReminder(deckId, deckName, intervalMinutes);
+      console.log('✅ Rappel ajouté avec succès');
+      
+      // Répondre au client
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: true, type: 'REMINDER_ADDED' });
       }
+    } else if (event.data.type === 'REMOVE_REMINDER') {
+      const { deckId } = event.data;
+      console.log('➖ Suppression d\'un rappel:', deckId);
+      await removeReminder(deckId);
+      console.log('✅ Rappel supprimé avec succès');
+    } else if (event.data.type === 'UPDATE_REMINDERS') {
+      // Synchroniser tous les rappels (pour compatibilité)
+      const { reminders } = event.data;
+      console.log('🔄 Mise à jour de tous les rappels:', reminders?.length || 0);
+      if (reminders && Array.isArray(reminders)) {
+        // Supprimer tous les rappels existants
+        await cancelAllReminders();
+        // Ajouter les nouveaux rappels
+        for (const reminder of reminders) {
+          await addReminder(reminder.deckId, reminder.deckName || 'Deck', reminder.intervalMinutes);
+        }
+        console.log('✅ Tous les rappels mis à jour');
+      }
+    } else if (event.data.type === 'GET_ALL_REMINDERS') {
+      const reminders = await getAllReminders();
+      console.log('📋 Récupération de tous les rappels:', reminders.length);
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ reminders });
+      } else {
+        // Fallback si MessageChannel n'est pas utilisé
+        event.source.postMessage({ type: 'ALL_REMINDERS', reminders }, event.origin);
+      }
+    } else if (event.data.type === 'CANCEL_ALL_REMINDERS') {
+      console.log('🗑️ Annulation de tous les rappels');
+      await cancelAllReminders();
+      console.log('✅ Tous les rappels annulés');
     }
-  } else if (event.data && event.data.type === 'GET_ALL_REMINDERS') {
-    const reminders = await getAllReminders();
+  } catch (error) {
+    console.error('❌ Erreur lors du traitement du message:', error);
     if (event.ports && event.ports[0]) {
-      event.ports[0].postMessage({ reminders });
-    } else {
-      // Fallback si MessageChannel n'est pas utilisé
-      event.source.postMessage({ type: 'ALL_REMINDERS', reminders }, event.origin);
+      event.ports[0].postMessage({ success: false, error: error.message });
     }
-  } else if (event.data && event.data.type === 'CANCEL_ALL_REMINDERS') {
-    await cancelAllReminders();
   }
 });
 
@@ -297,8 +335,8 @@ async function addReminder(deckId, deckName, intervalMinutes) {
       const now = Date.now();
       const nextNotification = now + (intervalMinutes * 60 * 1000);
       
+      // Construire l'objet notification
       const notification = {
-        id: existing ? existing.id : undefined,
         deckId: deckId,
         deckName: deckName,
         intervalMinutes: intervalMinutes,
@@ -306,6 +344,12 @@ async function addReminder(deckId, deckName, intervalMinutes) {
         lastNotification: null,
         createdAt: existing ? existing.createdAt : now
       };
+      
+      // Si un rappel existe déjà, inclure son ID pour la mise à jour
+      if (existing && existing.id) {
+        notification.id = existing.id;
+      }
+      // Sinon, laisser autoIncrement générer l'ID automatiquement
       
       const putRequest = store.put(notification);
       putRequest.onsuccess = async () => {
@@ -415,10 +459,10 @@ function startPeriodicCheck() {
   // Vérifier immédiatement
   checkScheduledNotifications();
   
-  // Vérifier périodiquement quand le service worker est actif (toutes les 5 minutes)
+  // Vérifier périodiquement quand le service worker est actif (toutes les minutes pour être plus réactif)
   checkInterval = setInterval(() => {
     checkScheduledNotifications();
-  }, 5 * 60000); // Toutes les 5 minutes pour économiser la batterie
+  }, 60000); // Toutes les minutes pour être plus réactif
   
   // Programmer un réveil pour vérifier les notifications même quand l'app est fermée
   scheduleNextWakeUp();
@@ -429,6 +473,8 @@ function startPeriodicCheck() {
       // Ignorer si déjà enregistré
     });
   }
+  
+  console.log('✅ Vérification périodique des notifications démarrée');
 }
 
 // Programmer le prochain réveil pour vérifier les notifications
@@ -584,15 +630,22 @@ function isWindows() {
     .catch(() => false);
 }
 
-// Afficher une notification de rappel (uniquement notifications système pour mobile)
+// Afficher une notification de rappel (notifications push pour mobile et desktop)
 async function showReviewNotification(deckName = 'Vos flashcards', deckId = null) {
+  // Vérifier que le service worker peut afficher des notifications
+  if (!self.registration || !self.registration.showNotification) {
+    console.error('❌ Service worker ne peut pas afficher de notifications');
+    return;
+  }
+  
   const title = 'Rappel de révision';
   
-  // Options de base pour toutes les plateformes
+  // Options de base pour toutes les plateformes (mobile et desktop)
   const options = {
     body: `Il est temps de réviser : ${deckName}`,
-    tag: `review-reminder-${deckId || 'default'}`,
+    tag: `review-reminder-${deckId || 'default'}-${Date.now()}`, // Tag unique pour éviter les conflits
     requireInteraction: false,
+    silent: false,
     data: {
       url: './index.html',
       deckId: deckId,
@@ -600,14 +653,20 @@ async function showReviewNotification(deckName = 'Vos flashcards', deckId = null
     }
   };
   
-  // Ajouter les options spécifiques selon la plateforme
-  // Vibrations pour mobile
-  if ('vibrate' in navigator) {
-    options.vibrate = [200, 100, 200];
+  // Ajouter l'icône si disponible
+  try {
+    options.icon = './icon-1024.png';
+    options.badge = './icon-1024.png';
+  } catch (e) {
+    // Ignorer si l'icône n'est pas disponible
   }
   
-  // Actions pour les notifications (si supportées)
-  if (self.registration.showNotification.length > 1) {
+  // Vibrations pour mobile (ignoré sur desktop, mais toujours ajouté)
+  // Le navigateur ignorera automatiquement si non supporté
+  options.vibrate = [200, 100, 200];
+  
+  // Actions pour les notifications (supportées sur desktop et mobile)
+  try {
     options.actions = [
       {
         action: 'open',
@@ -618,31 +677,36 @@ async function showReviewNotification(deckName = 'Vos flashcards', deckId = null
         title: 'Plus tard'
       }
     ];
-  }
-  
-  // Badge et icône (si disponibles)
-  try {
-    // Essayer d'ajouter une icône si disponible
-    options.icon = './icon-1024.png';
-    options.badge = './icon-1024.png';
   } catch (e) {
-    // Ignorer si les icônes ne sont pas disponibles
+    // Ignorer si les actions ne sont pas supportées
   }
   
   try {
+    // Afficher la notification
     await self.registration.showNotification(title, options);
-    console.log('Notification affichée:', deckName);
+    console.log('✅ Notification push affichée:', deckName, 'à', new Date().toLocaleTimeString());
   } catch (error) {
-    console.error('Erreur lors de l\'affichage de la notification:', error);
-    // Essayer sans les options avancées en cas d'erreur
+    console.error('❌ Erreur lors de l\'affichage de la notification:', error);
+    console.error('Détails de l\'erreur:', error.message, error.stack);
+    
+    // Essayer avec des options minimales en cas d'erreur
     try {
-      await self.registration.showNotification(title, {
+      const minimalOptions = {
         body: options.body,
         tag: options.tag,
         data: options.data
-      });
+      };
+      
+      // Ajouter l'icône si possible
+      if (options.icon) {
+        minimalOptions.icon = options.icon;
+      }
+      
+      await self.registration.showNotification(title, minimalOptions);
+      console.log('✅ Notification affichée avec options minimales');
     } catch (fallbackError) {
-      console.error('Erreur lors de l\'affichage de la notification (fallback):', fallbackError);
+      console.error('❌ Erreur critique lors de l\'affichage de la notification:', fallbackError);
+      console.error('Détails de l\'erreur fallback:', fallbackError.message, fallbackError.stack);
     }
   }
 }
