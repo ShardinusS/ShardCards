@@ -4,6 +4,12 @@
 
 ![ShardCards](icon-1024.png)
 
+<p>
+    <a href="https://shardinuss.github.io/shardcards">
+      <img src="https://img.shields.io/badge/Voir_le_site_en_ligne-000000?style=for-the-badge&logo=github&logoColor=white" alt="Live Demo">
+    </a>
+  </p>
+  
 **L'application de révision par flashcards la plus complète et totalement gratuite**
 
 [![PWA](https://img.shields.io/badge/PWA-Ready-blue)](https://web.dev/progressive-web-apps/)
@@ -272,3 +278,4 @@ ShardCards est une application open-source créée pour offrir une alternative g
 *ShardCards - L'application de flashcards 100% gratuite et illimitée*
 
 </div>
+
