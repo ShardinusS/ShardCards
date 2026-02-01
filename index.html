@@ -34,6 +34,22 @@
         </div>
     </div>
     
+    <!-- Toast container pour feedback visuel -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Modal de confirmation -->
+    <div id="confirm-modal" class="confirm-modal-overlay hidden">
+        <div class="confirm-modal">
+            <div class="confirm-modal-icon" id="confirm-modal-icon"></div>
+            <h3 id="confirm-modal-title">Confirmation</h3>
+            <p id="confirm-modal-message">Êtes-vous sûr ?</p>
+            <div class="confirm-modal-actions">
+                <button id="confirm-modal-cancel" class="btn btn-secondary">Annuler</button>
+                <button id="confirm-modal-confirm" class="btn btn-danger">Confirmer</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Écran principal - Liste des decks -->
     <div id="decks-view" class="view active">
         <header>
@@ -54,6 +70,14 @@
             <button class="deck-section-btn" data-section="base-decks">
                 <span>Decks de Base</span>
             </button>
+        </div>
+        
+        <!-- Filtre par tags -->
+        <div class="tags-filter-container" id="tags-filter-container">
+            <div class="tags-filter-scroll" id="tags-filter-scroll">
+                <button class="tag-filter-btn active" data-tag="all">Tous</button>
+                <!-- Tags dynamiques ajoutés ici -->
+            </div>
         </div>
         
         <!-- Conteneur pour Mes Decks -->
@@ -94,6 +118,25 @@
             </div>
         </header>
         
+        <!-- Barre de recherche et tri -->
+        <div class="cards-toolbar">
+            <div class="search-container">
+                <span class="search-icon icon-svg"></span>
+                <input type="text" id="cards-search" placeholder="Rechercher une carte..." autocomplete="off">
+                <button id="clear-search" class="clear-search-btn hidden" aria-label="Effacer">&times;</button>
+            </div>
+            <div class="sort-container">
+                <select id="cards-sort" aria-label="Trier par">
+                    <option value="default">Tri par défaut</option>
+                    <option value="score-asc">Difficulté ↑</option>
+                    <option value="score-desc">Difficulté ↓</option>
+                    <option value="alpha-asc">A → Z</option>
+                    <option value="alpha-desc">Z → A</option>
+                    <option value="review">Prochaine révision</option>
+                </select>
+            </div>
+        </div>
+        
         <div id="cards-container" class="cards-list">
             <!-- Les cartes seront ajoutées dynamiquement ici -->
         </div>
@@ -116,13 +159,18 @@
         </header>
         
         <div id="review-card" class="review-card">
-            <div id="card-front" class="card-side">
-                <p id="front-text"></p>
+            <div class="flip-card-inner" id="flip-card-inner">
+                <div id="card-front" class="card-side card-front">
+                    <div class="card-label">Question</div>
+                    <div class="card-content" id="front-content"></div>
+                    <div class="card-tap-hint">Tapez pour voir la réponse</div>
+                </div>
+                <div id="card-back" class="card-side card-back">
+                    <div class="card-label">Réponse</div>
+                    <div class="card-content" id="back-content"></div>
+                    <div class="card-tap-hint">Tapez pour revoir la question</div>
+                </div>
             </div>
-            <div id="card-back" class="card-side hidden">
-                <p id="back-text"></p>
-            </div>
-            <div id="reveal-hint" class="reveal-hint">Tapez pour révéler</div>
         </div>
         
         <div id="review-buttons" class="review-buttons hidden">
@@ -160,7 +208,7 @@
                 <!-- Les éléments du menu seront ajoutés dynamiquement -->
             </div>
             <div class="hamburger-menu-footer">
-                <div class="copyright">© 2025 Kenzo Metgy - Tous droits réservés</div>
+<div class="copyright">© 2026 Kenzo Metgy - Tous droits réservés</div>
             </div>
         </div>
     </div>

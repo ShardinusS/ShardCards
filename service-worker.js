@@ -1,5 +1,5 @@
-// Service Worker pour cache offline et notifications
-const CACHE_NAME = 'flashcards-v2';
+// Service Worker pour cache offline et notifications push
+const CACHE_NAME = 'flashcards-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -1001,37 +1001,109 @@ async function showReviewNotification(deckName = 'Vos flashcards', deckId = null
   }
 }
 
-// Gérer les clics sur les notifications
+// ============================================
+// GESTION DES PUSH NOTIFICATIONS (SERVEUR)
+// ============================================
+
+// Écouter les notifications push envoyées par le serveur
+self.addEventListener('push', (event) => {
+  console.log('Push notification reçue:', event);
+  
+  let data = {
+    title: 'Rappel de révision',
+    body: 'Il est temps de réviser vos flashcards !',
+    icon: './icon-1024.png',
+    badge: './icon-1024.png',
+    tag: 'review-reminder',
+    data: { url: './' }
+  };
+  
+  // Parser les données du push si disponibles
+  if (event.data) {
+    try {
+      const pushData = event.data.json();
+      data = { ...data, ...pushData };
+    } catch (e) {
+      console.log('Erreur parsing push data:', e);
+      // Utiliser le texte brut comme body
+      data.body = event.data.text() || data.body;
+    }
+  }
+  
+  const options = {
+    body: data.body,
+    icon: data.icon || './icon-1024.png',
+    badge: data.badge || './icon-1024.png',
+    tag: data.tag || `push-${Date.now()}`,
+    data: data.data || { url: './' },
+    vibrate: data.vibrate || [200, 100, 200],
+    requireInteraction: data.requireInteraction || false,
+    actions: [
+      { action: 'open', title: 'Ouvrir' },
+      { action: 'dismiss', title: 'Plus tard' }
+    ]
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Gérer les clics sur les notifications (push et locales)
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  const deckId = event.notification.data?.deckId;
+  const notificationData = event.notification.data || {};
+  const deckId = notificationData.deckId;
+  const targetUrl = notificationData.url || './index.html';
   
-  if (event.action === 'open' || !event.action) {
-    // Ouvrir l'application
-    event.waitUntil(
-      clients.matchAll({ type: 'window', includeUncontrolled: true })
-        .then((clientList) => {
-          // Si une fenêtre est déjà ouverte, la mettre au premier plan
-          for (let i = 0; i < clientList.length; i++) {
-            const client = clientList[i];
-            if (client.url.includes(self.registration.scope) && 'focus' in client) {
-              // Envoyer un message pour ouvrir le deck si nécessaire
-              if (deckId) {
-                client.postMessage({
-                  type: 'OPEN_DECK',
-                  deckId: deckId
-                });
-              }
-              return client.focus();
-            }
-          }
-          // Sinon, ouvrir une nouvelle fenêtre
-          if (clients.openWindow) {
-            return clients.openWindow('./index.html');
-          }
-        })
-    );
+  if (event.action === 'dismiss') {
+    // L'utilisateur a choisi "Plus tard", ne rien faire
+    return;
   }
+  
+  // Ouvrir l'application (action 'open' ou clic direct)
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // Si une fenêtre est déjà ouverte, la mettre au premier plan
+        for (let i = 0; i < clientList.length; i++) {
+          const client = clientList[i];
+          if (client.url.includes(self.registration.scope) && 'focus' in client) {
+            // Envoyer un message pour ouvrir le deck si nécessaire
+            if (deckId) {
+              client.postMessage({
+                type: 'OPEN_DECK',
+                deckId: deckId
+              });
+            }
+            return client.focus();
+          }
+        }
+        // Sinon, ouvrir une nouvelle fenêtre
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      })
+  );
+});
+
+// Gérer l'événement pushsubscriptionchange (renouvellement d'abonnement)
+self.addEventListener('pushsubscriptionchange', (event) => {
+  console.log('Push subscription changed');
+  
+  event.waitUntil(
+    // Notifier tous les clients pour qu'ils se réabonnent
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        clientList.forEach(client => {
+          client.postMessage({
+            type: 'PUSH_SUBSCRIPTION_CHANGED',
+            oldSubscription: event.oldSubscription,
+            newSubscription: event.newSubscription
+          });
+        });
+      })
+  );
 });
 

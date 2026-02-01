@@ -1,0 +1,9 @@
+{
+  "name": "shardcards",
+  "version": "1.0.0",
+  "description": "Application de flashcards avec notifications push",
+  "scripts": {},
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

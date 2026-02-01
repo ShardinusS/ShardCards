@@ -1,7 +1,7 @@
 {
   "name": "ShardCards",
   "short_name": "ShardCards",
-  "description": "Application de flashcards avec répétition espacée",
+  "description": "Application de flashcards avec répétition espacée et notifications de rappel",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -13,11 +13,17 @@
       "src": "./icon-1024.png",
       "sizes": "1024x1024",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "categories": ["education", "productivity"],
   "screenshots": [],
-  "shortcuts": []
+  "shortcuts": [],
+  "id": "shardcards-pwa",
+  "prefer_related_applications": false,
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
 }
 

@@ -274,6 +274,9 @@ const App = {
         }
         
         this.renderDecks();
+        this.renderTagsFilter();
+        this.setupCardToolbar();
+        this.isReversedMode = this.getReversedModeSetting();
         // S'assurer que le bouton d'ajout est visible au démarrage (section "Mes Decks" par défaut)
         const addDeckBtn = document.getElementById('add-deck-btn');
         if (addDeckBtn) {
@@ -281,10 +284,8 @@ const App = {
         }
         this.registerServiceWorker();
         
-        // Restaurer les rappels de révision si configurés (uniquement sur mobile)
-        if (this.isMobile()) {
-            this.restoreReviewReminders();
-        }
+        // Restaurer les rappels de révision
+        this.restoreReviewReminders();
         
         // Vérifier et tester les notifications au démarrage
         this.testNotificationsOnStart();
@@ -297,15 +298,14 @@ const App = {
     },
     
     // Restaurer les rappels de révision au chargement
-    restoreReviewReminders() {
-        // Les rappels sont maintenant stockés dans IndexedDB du service worker
-        // Ils seront automatiquement restaurés par le service worker
-        // On synchronise les rappels depuis localStorage vers le service worker
+    async restoreReviewReminders() {
+        const savedReminders = JSON.parse(localStorage.getItem('flashcards_reminders') || '[]');
+        const decks = Storage.getDecks();
+        
+        // Synchroniser avec le service worker local
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(registration => {
-                const savedReminders = JSON.parse(localStorage.getItem('flashcards_reminders') || '[]');
-                const decks = Storage.getDecks();
-                
+            try {
+                const registration = await navigator.serviceWorker.ready;
                 savedReminders.forEach(reminder => {
                     const deck = decks.find(d => d.id === reminder.deckId);
                     if (deck && registration.active) {
@@ -317,7 +317,9 @@ const App = {
                         });
                     }
                 });
-            });
+            } catch (error) {
+                console.log('Erreur sync service worker:', error);
+            }
         }
     },
     
@@ -432,6 +434,7 @@ const App = {
                 e.preventDefault();
                 e.stopPropagation();
                 if (this.isRevealed) {
+                    this.addButtonFeedback(againBtn);
                     this.rateCard(0);
                 }
             });
@@ -442,6 +445,7 @@ const App = {
                 e.preventDefault();
                 e.stopPropagation();
                 if (this.isRevealed) {
+                    this.addButtonFeedback(goodBtn);
                     this.rateCard(1);
                 }
             });
@@ -452,6 +456,7 @@ const App = {
                 e.preventDefault();
                 e.stopPropagation();
                 if (this.isRevealed) {
+                    this.addButtonFeedback(easyBtn);
                     this.rateCard(2);
                 }
             });
@@ -820,14 +825,21 @@ const App = {
     // ============================================
     
     renderDecks() {
-        const decks = Storage.getDecks();
+        let decks = Storage.getDecks();
         const container = document.getElementById('decks-container');
         
+        // Appliquer le filtre par tags
+        decks = this.filterDecksByTag(decks);
+        
         if (decks.length === 0) {
+            const allDecks = Storage.getDecks();
+            const message = allDecks.length === 0 
+                ? 'Aucun deck. Créez-en un pour commencer !'
+                : 'Aucun deck avec ce tag.';
             container.innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">${Icons.getIcon('books', 64, 'var(--text-secondary)')}</div>
-                    <div class="empty-state-text">Aucun deck. Créez-en un pour commencer !</div>
+                    <div class="empty-state-text">${message}</div>
                 </div>
             `;
             return;
@@ -842,6 +854,11 @@ const App = {
             const cardsDue = deck.cards.filter(card => !card.nextReview || card.nextReview <= now).length;
             const totalCards = deck.cards.length;
             
+            // Afficher les tags
+            const tagsHtml = deck.tags && deck.tags.length > 0 
+                ? `<div class="deck-tags">${deck.tags.map(tag => `<span class="deck-tag">${this.escapeHtml(tag)}</span>`).join('')}</div>` 
+                : '';
+            
             return `
                 <div class="deck-card" data-deck-id="${deck.id}">
                     <div class="deck-actions">
@@ -849,6 +866,7 @@ const App = {
                         <button class="deck-action-btn" data-deck-id="${deck.id}" data-action="review" title="Réviser">${Icons.getIcon('refresh', 16, 'currentColor')}</button>
                     </div>
                     <h3>${this.escapeHtml(deck.name)}</h3>
+                    ${tagsHtml}
                     <div class="deck-info">
                         <span>${totalCards} carte${totalCards > 1 ? 's' : ''}</span>
                         ${cardsDue > 0 ? `<span class="cards-due-badge">${cardsDue} à réviser</span>` : ''}
@@ -1220,7 +1238,8 @@ const App = {
             }
         }
         
-        container.innerHTML = deck.cards.map((card, index) => {
+        // Préparer les cartes avec leurs index originaux et scores
+        let cardsWithIndex = deck.cards.map((card, index) => {
             // Charger les scores sauvegardés pour les decks de base, sinon initialiser
             if (this.currentIsBaseDeck && savedScores && savedScores[index]) {
                 const saved = savedScores[index];
@@ -1240,7 +1259,36 @@ const App = {
                 if (!card.lastReview) card.lastReview = null;
                 if (!card.againCount) card.againCount = 0;
             }
-            
+            return { card, originalIndex: index };
+        });
+        
+        // Appliquer le filtrage et le tri
+        const filteredCards = this.filterAndSortCards(cardsWithIndex.map(c => c.card));
+        
+        // Reconstruire avec les index originaux
+        cardsWithIndex = filteredCards.map(card => {
+            const originalIndex = deck.cards.findIndex(c => c === card);
+            return { card, originalIndex };
+        });
+        
+        // Afficher un message si aucun résultat
+        if (cardsWithIndex.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <div class="empty-state-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </div>
+                    <div class="empty-state-text">Aucune carte ne correspond à votre recherche.</div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Générer le HTML pour les cartes filtrées et triées
+        container.innerHTML = cardsWithIndex.map(({ card, originalIndex }) => {
             const cardScore = card.cardScore || 0;
             
             // Couleur selon le score (système de zones)
@@ -1249,67 +1297,37 @@ const App = {
             
             // Conditionally render action buttons for cards
             const cardActionButtons = this.currentIsBaseDeck ? '' : `
-                <button class="card-action-btn" data-card-index="${index}" data-action="edit">Modifier</button>
-                <button class="card-action-btn" data-card-index="${index}" data-action="delete" style="color: var(--error);">Supprimer</button>
+                <button class="card-action-btn-compact" data-card-index="${originalIndex}" data-action="edit">${Icons.getIcon('edit', 14)} Modifier</button>
+                <button class="card-action-btn-compact card-action-btn-delete" data-card-index="${originalIndex}" data-action="delete">${Icons.getIcon('delete', 14)} Supprimer</button>
             `;
 
-            // Construire le contenu de la question
-            let frontHtml = '';
+            // Texte pour l'affichage
             const hasFrontImage = card.frontImage && (typeof card.frontImage === 'string') && card.frontImage.trim() !== '';
-            const hasFrontText = card.front && (typeof card.front === 'string') && card.front.trim() !== '';
-            
-            if (hasFrontImage) {
-                frontHtml += `<div class="card-list-image-container"><img src="${this.escapeHtml(card.frontImage)}" alt="Recto" class="card-list-image"></div>`;
-            }
-            if (hasFrontText) {
-                const textClass = hasFrontImage ? 'card-list-text card-list-text-with-image' : 'card-list-text';
-                frontHtml += `<div class="${textClass}">${this.escapeHtml(card.front)}</div>`;
-            }
-            if (!hasFrontImage && !hasFrontText) {
-                frontHtml += `<div class="card-list-text" style="color: var(--text-secondary); font-style: italic;">Aucun contenu</div>`;
-            }
-            
-            // Construire le contenu de la réponse
-            let backHtml = '';
             const hasBackImage = card.backImage && (typeof card.backImage === 'string') && card.backImage.trim() !== '';
-            const hasBackText = card.back && (typeof card.back === 'string') && card.back.trim() !== '';
+            const frontText = card.front && card.front.trim() ? this.escapeHtml(card.front) : '';
+            const backText = card.back && card.back.trim() ? this.escapeHtml(card.back) : '';
             
-            if (hasBackImage) {
-                backHtml += `<div class="card-list-image-container"><img src="${this.escapeHtml(card.backImage)}" alt="Verso" class="card-list-image"></div>`;
-            }
-            if (hasBackText) {
-                const textClass = hasBackImage ? 'card-list-text card-list-text-with-image' : 'card-list-text';
-                backHtml += `<div class="${textClass}">${this.escapeHtml(card.back)}</div>`;
-            }
-            if (!hasBackImage && !hasBackText) {
-                backHtml += `<div class="card-list-text" style="color: var(--text-secondary); font-style: italic;">Aucun contenu</div>`;
-            }
-
+            // Images
+            const frontImg = hasFrontImage ? `<img src="${this.escapeHtml(card.frontImage)}" alt="" class="card-grid-img">` : '';
+            const backImg = hasBackImage ? `<img src="${this.escapeHtml(card.backImage)}" alt="" class="card-grid-img">` : '';
+            
+            // Indicateur de difficulté
+            const difficultyBadge = `<span class="card-difficulty-badge" style="background: ${cardColor};" title="${zoneName}"></span>`;
+            
             return `
-                <div class="card-item">
-                    <div class="card-color-band-top" style="background-color: ${cardColor};"></div>
-                    <div class="card-item-header">
-                        <div class="card-item-info">
-                            <span class="card-zone-badge" style="background-color: ${cardColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
-                                ${zoneName}
-                            </span>
-                        </div>
+                <div class="card-grid-item" data-score="${cardScore}">
+                    ${difficultyBadge}
+                    <div class="card-grid-section">
+                        <div class="card-grid-label">Recto</div>
+                        ${frontImg}
+                        <div class="card-grid-text">${frontText || '<span class="card-grid-empty">-</span>'}</div>
                     </div>
-                    <div class="card-item-review-style">
-                        <div class="card-item-side">
-                            <div class="card-item-side-label">Recto</div>
-                            <div class="card-item-side-content">
-                                ${frontHtml}
-                            </div>
-                        </div>
-                        <div class="card-item-side">
-                            <div class="card-item-side-label">Verso</div>
-                            <div class="card-item-side-content">
-                                ${backHtml}
-                            </div>
-                        </div>
+                    <div class="card-grid-section">
+                        <div class="card-grid-label">Verso</div>
+                        ${backImg}
+                        <div class="card-grid-text">${backText || '<span class="card-grid-empty">-</span>'}</div>
                     </div>
-                    <div class="card-item-actions">
+                    <div class="card-grid-actions">
                         ${cardActionButtons}
                     </div>
                 </div>
@@ -1320,7 +1338,7 @@ const App = {
         if (!this.currentIsBaseDeck) {
             const cardsContainer = document.getElementById('cards-container');
             if (cardsContainer) {
-                cardsContainer.querySelectorAll('.card-action-btn').forEach(btn => {
+                cardsContainer.querySelectorAll('.card-action-btn-compact').forEach(btn => {
                     const cardIndex = parseInt(btn.getAttribute('data-card-index'));
                     const action = btn.getAttribute('data-action');
                     btn.addEventListener('click', (e) => {
@@ -1368,105 +1386,106 @@ const App = {
         
         const card = this.reviewCards[this.currentReviewIndex];
         
-        // Construire le HTML pour le recto
+        // Déterminer si on utilise le mode inversé
+        const reversed = this.isReversedMode;
+        
+        // En mode inversé, on échange recto et verso
+        const displayFront = reversed ? card.back : card.front;
+        const displayBack = reversed ? card.front : card.back;
+        const displayFrontImage = reversed ? card.backImage : card.frontImage;
+        const displayBackImage = reversed ? card.frontImage : card.backImage;
+        const frontLabel = reversed ? 'Réponse' : 'Question';
+        const backLabel = reversed ? 'Question' : 'Réponse';
+        const frontHint = reversed ? 'Tapez pour voir la question' : 'Tapez pour voir la réponse';
+        const backHint = reversed ? 'Tapez pour revoir la réponse' : 'Tapez pour revoir la question';
+        
+        // Construire le HTML pour le recto (ce qui est affiché en premier)
         let frontHtml = '';
-        const hasFrontImage = card.frontImage && (typeof card.frontImage === 'string') && card.frontImage.trim() !== '';
-        const hasFrontText = card.front && (typeof card.front === 'string') && card.front.trim() !== '';
+        const hasFrontImage = displayFrontImage && (typeof displayFrontImage === 'string') && displayFrontImage.trim() !== '';
+        const hasFrontText = displayFront && (typeof displayFront === 'string') && displayFront.trim() !== '';
         
         if (hasFrontImage) {
-            frontHtml += `<div class="review-image-container"><img src="${this.escapeHtml(card.frontImage)}" alt="Recto" class="review-image"></div>`;
+            frontHtml += `<div class="review-image-container"><img src="${this.escapeHtml(displayFrontImage)}" alt="${frontLabel}" class="review-image"></div>`;
         }
         if (hasFrontText) {
             const textClass = hasFrontImage ? 'review-text review-text-with-image' : 'review-text';
-            frontHtml += `<p class="${textClass}">${this.escapeHtml(card.front)}</p>`;
+            frontHtml += `<p class="${textClass}">${this.escapeHtml(displayFront)}</p>`;
         }
         if (!hasFrontImage && !hasFrontText) {
             frontHtml += `<p class="review-text" style="color: var(--text-secondary); font-style: italic;">Aucun contenu</p>`;
         }
         
-        // Construire le HTML pour le verso
+        // Construire le HTML pour le verso (ce qui est révélé)
         let backHtml = '';
-        const hasBackImage = card.backImage && (typeof card.backImage === 'string') && card.backImage.trim() !== '';
-        const hasBackText = card.back && (typeof card.back === 'string') && card.back.trim() !== '';
+        const hasBackImage = displayBackImage && (typeof displayBackImage === 'string') && displayBackImage.trim() !== '';
+        const hasBackText = displayBack && (typeof displayBack === 'string') && displayBack.trim() !== '';
         
         if (hasBackImage) {
-            backHtml += `<div class="review-image-container"><img src="${this.escapeHtml(card.backImage)}" alt="Verso" class="review-image"></div>`;
+            backHtml += `<div class="review-image-container"><img src="${this.escapeHtml(displayBackImage)}" alt="${backLabel}" class="review-image"></div>`;
         }
         if (hasBackText) {
             const textClass = hasBackImage ? 'review-text review-text-with-image' : 'review-text';
-            backHtml += `<p class="${textClass}">${this.escapeHtml(card.back)}</p>`;
+            backHtml += `<p class="${textClass}">${this.escapeHtml(displayBack)}</p>`;
         }
         if (!hasBackImage && !hasBackText) {
             backHtml += `<p class="review-text" style="color: var(--text-secondary); font-style: italic;">Aucun contenu</p>`;
         }
         
-        // Ajuster la taille du texte en fonction de la taille des images après le rendu
-        requestAnimationFrame(() => {
-            this.adjustTextSizeForImages();
-        });
-        
-        // Restaurer la structure HTML si nécessaire
+        // Récupérer les éléments
         const reviewCard = document.getElementById('review-card');
-        const frontElement = document.getElementById('card-front');
-        const backElement = document.getElementById('card-back');
+        const flipCardInner = document.getElementById('flip-card-inner');
+        const frontContent = document.getElementById('front-content');
+        const backContent = document.getElementById('back-content');
         
-        // Si les éléments n'existent pas, les recréer
-        if (!frontElement || !backElement) {
+        // Si les éléments n'existent pas, recréer la structure
+        if (!flipCardInner || !frontContent || !backContent) {
             if (reviewCard) {
                 reviewCard.innerHTML = `
-                    <div id="card-front" class="card-side">
+                    <div class="flip-card-inner" id="flip-card-inner">
+                        <div id="card-front" class="card-side card-front">
+                            <div class="card-label">${frontLabel}</div>
+                            <div class="card-content" id="front-content"></div>
+                            <div class="card-tap-hint">${frontHint}</div>
+                        </div>
+                        <div id="card-back" class="card-side card-back">
+                            <div class="card-label">${backLabel}</div>
+                            <div class="card-content" id="back-content"></div>
+                            <div class="card-tap-hint">${backHint}</div>
+                        </div>
                     </div>
-                    <div id="card-back" class="card-side hidden">
-                    </div>
-                    <div id="reveal-hint" class="reveal-hint">Tapez pour révéler</div>
                 `;
-                // Réattacher l'event listener après recréation
-                reviewCard.addEventListener('click', () => this.revealAnswer());
             }
+        } else {
+            // Mettre à jour les labels si la structure existe déjà
+            const frontLabelEl = document.querySelector('#card-front .card-label');
+            const backLabelEl = document.querySelector('#card-back .card-label');
+            const frontHintEl = document.querySelector('#card-front .card-tap-hint');
+            const backHintEl = document.querySelector('#card-back .card-tap-hint');
+            if (frontLabelEl) frontLabelEl.textContent = frontLabel;
+            if (backLabelEl) backLabelEl.textContent = backLabel;
+            if (frontHintEl) frontHintEl.textContent = frontHint;
+            if (backHintEl) backHintEl.textContent = backHint;
         }
         
         // Mettre à jour le contenu
-        const updatedFrontElement = document.getElementById('card-front');
-        const updatedBackElement = document.getElementById('card-back');
+        const updatedFrontContent = document.getElementById('front-content');
+        const updatedBackContent = document.getElementById('back-content');
+        const updatedFlipCardInner = document.getElementById('flip-card-inner');
         
-        if (updatedFrontElement) {
-            updatedFrontElement.innerHTML = frontHtml;
-            // Afficher le recto et réinitialiser les styles
-            updatedFrontElement.classList.remove('hidden');
-            updatedFrontElement.style.display = 'flex';
-            updatedFrontElement.style.opacity = '';
-            updatedFrontElement.style.transform = '';
-            updatedFrontElement.style.transition = '';
-            // Ajouter la classe has-image si une image est présente
-            if (hasFrontImage) {
-                updatedFrontElement.classList.add('has-image');
-            } else {
-                updatedFrontElement.classList.remove('has-image');
-            }
+        if (updatedFrontContent) {
+            updatedFrontContent.innerHTML = frontHtml;
         }
         
-        if (updatedBackElement) {
-            updatedBackElement.innerHTML = backHtml;
-            // Cacher le verso
-            updatedBackElement.classList.add('hidden');
-            updatedBackElement.style.display = 'none';
-            // Réinitialiser les styles
-            updatedBackElement.style.opacity = '';
-            updatedBackElement.style.transform = '';
-            updatedBackElement.style.transition = '';
-            // Ajouter la classe has-image si une image est présente
-            if (hasBackImage) {
-                updatedBackElement.classList.add('has-image');
-            } else {
-                updatedBackElement.classList.remove('has-image');
-            }
+        if (updatedBackContent) {
+            updatedBackContent.innerHTML = backHtml;
         }
         
-        // Ajuster la taille du texte en fonction de la taille des images après le rendu
-        requestAnimationFrame(() => {
-            this.adjustTextSizeForImages();
-        });
+        // Réinitialiser la carte (pas retournée)
+        if (updatedFlipCardInner) {
+            updatedFlipCardInner.classList.remove('flipped');
+        }
         
+        // Mettre à jour la progression
         const reviewProgress = document.getElementById('review-progress');
         if (reviewProgress) {
             reviewProgress.textContent = `${this.currentReviewIndex + 1} / ${this.reviewCards.length}`;
@@ -1479,18 +1498,6 @@ const App = {
         const reviewButtons = document.getElementById('review-buttons');
         if (reviewButtons) {
             reviewButtons.classList.add('hidden');
-            reviewButtons.style.pointerEvents = 'none';
-            reviewButtons.style.opacity = '';
-            reviewButtons.style.transform = '';
-            reviewButtons.style.transition = '';
-        }
-        
-        // Réafficher le hint
-        const revealHint = document.getElementById('reveal-hint');
-        if (revealHint) {
-            revealHint.style.display = '';
-            revealHint.style.opacity = '0.7';
-            revealHint.style.transition = 'opacity 0.3s ease';
         }
     },
     
@@ -1543,67 +1550,46 @@ const App = {
     },
     
     revealAnswer() {
-        if (!this.isRevealed) {
-            this.revealCard();
+        // Permet de retourner la carte dans les deux sens
+        this.toggleCard();
+    },
+    
+    toggleCard() {
+        const flipCardInner = document.getElementById('flip-card-inner');
+        if (!flipCardInner) return;
+        
+        // Toggle la classe flipped
+        flipCardInner.classList.toggle('flipped');
+        
+        // Mettre à jour l'état
+        this.isRevealed = flipCardInner.classList.contains('flipped');
+        
+        // Afficher/cacher les boutons selon l'état
+        const reviewButtons = document.getElementById('review-buttons');
+        if (reviewButtons) {
+            if (this.isRevealed) {
+                setTimeout(() => {
+                    reviewButtons.classList.remove('hidden');
+                }, 300);
+            } else {
+                reviewButtons.classList.add('hidden');
+            }
         }
     },
     
     revealCard() {
-        if (this.isRevealed) return; // Éviter les doubles révélation
-        
-        this.isRevealed = true;
-        const frontElement = document.getElementById('card-front');
-        const backElement = document.getElementById('card-back');
-        const revealHint = document.getElementById('reveal-hint');
-        
-        // Cacher le recto et afficher le verso
-        if (frontElement) {
-            frontElement.classList.add('hidden');
-            frontElement.style.display = 'none';
-        }
-        
-        if (backElement) {
-            backElement.style.display = 'flex';
-            backElement.classList.remove('hidden');
-            // Animation en arrière-plan, mais l'action est déjà faite
-            requestAnimationFrame(() => {
-                backElement.style.opacity = '0';
-                backElement.style.transform = 'scale(0.9)';
-                setTimeout(() => {
-                    backElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                    backElement.style.opacity = '1';
-                    backElement.style.transform = 'scale(1)';
-                    // Ajuster la taille du texte après l'affichage du verso
-                    this.adjustTextSizeForImages();
-                }, 10);
-            });
-        }
-        
-        // Cacher le hint avec animation en arrière-plan
-        if (revealHint) {
-            revealHint.style.transition = 'opacity 0.3s ease';
-            revealHint.style.opacity = '0';
-            setTimeout(() => {
-                revealHint.style.display = 'none';
-            }, 300);
-        }
-        
-        const reviewButtons = document.getElementById('review-buttons');
-        if (reviewButtons) {
-            // Rendre les boutons cliquables immédiatement
-            reviewButtons.classList.remove('hidden');
-            reviewButtons.style.pointerEvents = 'auto';
-            reviewButtons.style.opacity = '1';
-            reviewButtons.style.transform = 'translateY(0)';
+        // Force la révélation (pour rateCard)
+        const flipCardInner = document.getElementById('flip-card-inner');
+        if (flipCardInner && !flipCardInner.classList.contains('flipped')) {
+            flipCardInner.classList.add('flipped');
+            this.isRevealed = true;
             
-            // Animation visuelle en arrière-plan (ne bloque pas les clics)
-            // On garde pointer-events: auto même pendant l'animation
-            requestAnimationFrame(() => {
-                // Animation d'entrée depuis le bas
-                reviewButtons.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                reviewButtons.style.opacity = '1';
-                reviewButtons.style.transform = 'translateY(0)';
-            });
+            const reviewButtons = document.getElementById('review-buttons');
+            if (reviewButtons) {
+                setTimeout(() => {
+                    reviewButtons.classList.remove('hidden');
+                }, 300);
+            }
         }
     },
     
@@ -1675,8 +1661,38 @@ const App = {
         }
         
         this.currentReviewIndex++;
-        // Afficher la carte suivante immédiatement, les animations se feront en arrière-plan
-        this.showReviewCard();
+        
+        // Cacher les boutons
+        const reviewButtons = document.getElementById('review-buttons');
+        const flipCardInner = document.getElementById('flip-card-inner');
+        const backContent = document.getElementById('back-content');
+        
+        if (reviewButtons) {
+            reviewButtons.classList.add('hidden');
+        }
+        
+        // Cacher le contenu du verso avant de retourner
+        if (backContent) {
+            backContent.style.visibility = 'hidden';
+        }
+        
+        // Retourner la carte vers le recto (avec animation)
+        if (flipCardInner) {
+            flipCardInner.classList.remove('flipped');
+        }
+        
+        this.isRevealed = false;
+        
+        // Attendre la fin de l'animation de flip avant de charger la nouvelle carte
+        setTimeout(() => {
+            // Charger la nouvelle carte
+            this.showReviewCard();
+            
+            // Réafficher le verso (sera caché de toute façon car pas retourné)
+            if (backContent) {
+                backContent.style.visibility = '';
+            }
+        }, 350);
     },
     
     completeReview() {
@@ -1691,7 +1707,7 @@ const App = {
         if (reviewCard) {
             reviewCard.innerHTML = `
                 <div class="card-side" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; padding: 40px;">
-                    <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+                    <div style="margin-bottom: 20px;">${Icons.getIcon('success', 64, 'var(--success)')}</div>
                     <h2 style="font-size: 28px; color: var(--primary-color); margin-bottom: 15px; text-align: center;">Révision terminée !</h2>
                     <p style="font-size: 18px; color: var(--text-primary); margin-bottom: 30px; text-align: center;">
                         Vous avez révisé <strong>${totalCards}</strong> carte${totalCards > 1 ? 's' : ''}.
@@ -1883,6 +1899,13 @@ const App = {
                     <label for="new-deck-name">Nom du deck</label>
                     <input type="text" id="new-deck-name" required placeholder="Ex: Vocabulaire anglais">
                 </div>
+                <div class="form-group">
+                    <label for="new-deck-tags">Tags (séparés par des virgules)</label>
+                    <input type="text" id="new-deck-tags" placeholder="Ex: Math, Physique, Terminale">
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
+                        Les tags permettent de filtrer et organiser vos decks
+                    </small>
+                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="App.hideModal()">Annuler</button>
                     <button type="submit" class="btn btn-primary">Créer</button>
@@ -1933,19 +1956,27 @@ const App = {
     
     addDeck() {
         const nameInput = document.getElementById('new-deck-name');
+        const tagsInput = document.getElementById('new-deck-tags');
         if (!nameInput) {
             return;
         }
         
         const name = nameInput.value.trim();
         if (!name) {
-            alert('Veuillez entrer un nom pour le deck.');
+            this.showToast('Veuillez entrer un nom pour le deck.', 'error');
             return;
         }
+        
+        // Parser les tags
+        const tagsValue = tagsInput ? tagsInput.value.trim() : '';
+        const tags = tagsValue 
+            ? tagsValue.split(',').map(t => t.trim()).filter(t => t.length > 0)
+            : [];
         
         const deck = {
             id: Date.now().toString(),
             name: name,
+            tags: tags,
             cards: []
         };
         
@@ -1953,13 +1984,15 @@ const App = {
             Storage.saveDeck(deck);
             // Fermer la modale immédiatement sans délai
             this.hideModal();
-            // Rendre les decks après un court délai pour la fluidité
+            // Rendre les decks et les tags après un court délai pour la fluidité
             requestAnimationFrame(() => {
                 this.renderDecks();
+                this.renderTagsFilter();
             });
+            this.showToast('Deck créé avec succès', 'success');
         } catch (error) {
             console.error('Erreur lors de la création du deck:', error);
-            alert('Erreur lors de la création du deck. Veuillez réessayer.');
+            this.showToast('Erreur lors de la création du deck.', 'error');
         }
     },
     
@@ -1975,11 +2008,20 @@ const App = {
         const deck = this.getCurrentDeck();
         if (!deck) return;
         
+        const existingTags = deck.tags && Array.isArray(deck.tags) ? deck.tags.join(', ') : '';
+        
         const content = `
             <form id="edit-deck-form">
                 <div class="form-group">
                     <label for="edit-deck-name">Nom du deck</label>
                     <input type="text" id="edit-deck-name" required placeholder="Nom du deck" value="${this.escapeHtml(deck.name || '')}">
+                </div>
+                <div class="form-group">
+                    <label for="edit-deck-tags">Tags (séparés par des virgules)</label>
+                    <input type="text" id="edit-deck-tags" placeholder="Ex: Math, Physique, Terminale" value="${this.escapeHtml(existingTags)}">
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
+                        Les tags permettent de filtrer et organiser vos decks
+                    </small>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="App.hideModal()">Annuler</button>
@@ -2006,24 +2048,35 @@ const App = {
         
         // Empêcher l'édition des decks de base
         if (this.currentIsBaseDeck) {
-            alert('Les decks de base ne peuvent pas être modifiés.');
+            this.showToast('Les decks de base ne peuvent pas être modifiés.', 'error');
             return;
         }
         
         const name = document.getElementById('edit-deck-name').value.trim();
+        const tagsInput = document.getElementById('edit-deck-tags');
+        
         if (!name) {
-            alert('Veuillez entrer un nom pour le deck.');
+            this.showToast('Veuillez entrer un nom pour le deck.', 'error');
             return;
         }
+        
+        // Parser les tags
+        const tagsValue = tagsInput ? tagsInput.value.trim() : '';
+        const tags = tagsValue 
+            ? tagsValue.split(',').map(t => t.trim()).filter(t => t.length > 0)
+            : [];
         
         const deck = this.getCurrentDeck();
         if (!deck) return;
         
         deck.name = name;
+        deck.tags = tags;
         Storage.saveDeck(deck);
         document.getElementById('deck-title').textContent = name;
         this.renderDecks();
+        this.renderTagsFilter();
         this.hideModal();
+        this.showToast('Deck modifié avec succès', 'success');
     },
     
     deleteDeck(id) {
@@ -2033,17 +2086,25 @@ const App = {
         
         // Empêcher la suppression des decks de base
         if (this.currentIsBaseDeck || (this.baseDecks && this.baseDecks.find(d => d.id === id))) {
-            alert('Les decks de base ne peuvent pas être supprimés.');
+            this.showToast('Les decks de base ne peuvent pas être supprimés.', 'error');
             return;
         }
         
-        if (!confirm('Êtes-vous sûr de vouloir supprimer ce deck ?')) {
-            return;
-        }
+        const deck = Storage.getDeck(id);
+        const deckName = deck ? deck.name : 'ce deck';
         
-        Storage.deleteDeck(id);
-        this.showView('decks');
-        this.renderDecks();
+        this.showConfirmModal(
+            'Supprimer le deck',
+            `Êtes-vous sûr de vouloir supprimer "${deckName}" ? Cette action est irréversible.`,
+            () => {
+                Storage.deleteDeck(id);
+                this.showView('decks');
+                this.renderDecks();
+                this.renderTagsFilter();
+                this.showToast('Deck supprimé avec succès', 'success');
+            },
+            'danger'
+        );
     },
     
     showAddCardModal() {
@@ -2487,20 +2548,27 @@ const App = {
     
     deleteCard(index) {
         if (this.currentIsBaseDeck) {
-            alert('Les decks de base ne peuvent pas être modifiés.');
-            return;
-        }
-        
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette carte ?')) {
+            this.showToast('Les decks de base ne peuvent pas être modifiés.', 'error');
             return;
         }
         
         const deck = this.getCurrentDeck();
         if (!deck) return;
         
-        deck.cards.splice(index, 1);
-        Storage.saveDeck(deck);
-        this.renderCards();
+        const card = deck.cards[index];
+        const cardPreview = card.front ? card.front.substring(0, 30) + (card.front.length > 30 ? '...' : '') : 'cette carte';
+        
+        this.showConfirmModal(
+            'Supprimer la carte',
+            `Êtes-vous sûr de vouloir supprimer "${cardPreview}" ?`,
+            () => {
+                deck.cards.splice(index, 1);
+                Storage.saveDeck(deck);
+                this.renderCards();
+                this.showToast('Carte supprimée', 'success');
+            },
+            'danger'
+        );
     },
     
     // ============================================
@@ -2513,6 +2581,7 @@ const App = {
     // ============================================
     
     showReviewSettingsModal() {
+        const reversedChecked = this.isReversedMode ? 'checked' : '';
         const content = `
             <form id="review-settings-form">
                 <div class="form-group">
@@ -2520,6 +2589,16 @@ const App = {
                     <input type="number" id="cards-per-session" min="1" max="100" value="${this.cardsPerSession}" required>
                     <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
                         Les cartes les plus difficiles seront privilégiées
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="reversed-mode" ${reversedChecked}>
+                        <span class="checkbox-custom"></span>
+                        <span>Mode révision inversé</span>
+                    </label>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
+                        Affiche d'abord la réponse, puis la question (utile pour l'apprentissage bidirectionnel)
                     </small>
                 </div>
                 <div class="form-actions">
@@ -2537,13 +2616,16 @@ const App = {
                 form.addEventListener('submit', (e) => {
                     e.preventDefault();
                     const cardsPerSession = parseInt(document.getElementById('cards-per-session').value);
+                    const reversedMode = document.getElementById('reversed-mode').checked;
+                    
                     if (cardsPerSession > 0 && cardsPerSession <= 100) {
                         this.cardsPerSession = cardsPerSession;
                         localStorage.setItem('flashcards_cardsPerSession', cardsPerSession.toString());
+                        this.setReversedModeSetting(reversedMode);
                         this.hideModal();
-                        alert(`Configuration enregistrée : ${cardsPerSession} cartes par session`);
+                        this.showToast('Paramètres enregistrés', 'success');
                     } else {
-                        alert('Veuillez entrer un nombre entre 1 et 100');
+                        this.showToast('Veuillez entrer un nombre entre 1 et 100', 'error');
                     }
                 });
             }
@@ -2562,11 +2644,29 @@ const App = {
         let cardsMedium = 0;
         let cardsHard = 0;
         let cardsVeryHard = 0;
+        let totalScore = 0;
+        let totalReviews = 0;
+        let reviewsToday = 0;
+        let streakDays = 0;
+        
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
         
         deck.cards.forEach(card => {
             const cardScore = card.cardScore || 0;
+            totalScore += cardScore;
             if (!card.nextReview || card.nextReview <= now) {
                 cardsDue++;
+            }
+            
+            // Compter les révisions
+            if (card.repetitions) {
+                totalReviews += card.repetitions;
+            }
+            
+            // Révisions aujourd'hui
+            if (card.lastReview && card.lastReview >= todayStart.getTime()) {
+                reviewsToday++;
             }
             
             if (cardScore < 10) {
@@ -2580,51 +2680,144 @@ const App = {
             }
         });
         
+        // Calculer le pourcentage de maîtrise (basé sur les cartes faciles et moyennes)
+        const masteryPercent = totalCards > 0 ? Math.round(((cardsEasy + cardsMedium * 0.5) / totalCards) * 100) : 0;
+        const avgScore = totalCards > 0 ? Math.round(totalScore / totalCards) : 0;
+        
+        // Calculer les pourcentages pour les barres
+        const easyPercent = totalCards > 0 ? (cardsEasy / totalCards) * 100 : 0;
+        const mediumPercent = totalCards > 0 ? (cardsMedium / totalCards) * 100 : 0;
+        const hardPercent = totalCards > 0 ? (cardsHard / totalCards) * 100 : 0;
+        const veryHardPercent = totalCards > 0 ? (cardsVeryHard / totalCards) * 100 : 0;
+        
+        // Couleur du cercle selon le pourcentage
+        let circleColor = '#F44336'; // Rouge par défaut
+        if (masteryPercent >= 80) circleColor = '#4CAF50'; // Vert
+        else if (masteryPercent >= 60) circleColor = '#8BC34A'; // Vert clair
+        else if (masteryPercent >= 40) circleColor = '#FFC107'; // Jaune
+        else if (masteryPercent >= 20) circleColor = '#FF9800'; // Orange
+        
         const content = `
-            <div style="padding: 10px 0;">
-                <div style="margin-bottom: 20px;">
-                    <h3 style="color: var(--primary-color); margin-bottom: 15px;">Statistiques du deck</h3>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div style="display: flex; justify-content: space-between; padding: 10px; background: var(--surface); border-radius: 8px;">
-                            <span><strong>Total de cartes:</strong></span>
-                            <span>${totalCards}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; padding: 10px; background: var(--surface); border-radius: 8px;">
-                            <span><strong>À réviser:</strong></span>
-                            <span style="color: var(--primary-color); font-weight: 600;">${cardsDue}</span>
+            <div class="stats-container">
+                <!-- Score de maîtrise avec cercle animé -->
+                <div class="stats-mastery">
+                    <div class="mastery-circle-container">
+                        <svg class="mastery-svg" viewBox="0 0 100 100">
+                            <circle class="mastery-bg" cx="50" cy="50" r="45"/>
+                            <circle class="mastery-progress" cx="50" cy="50" r="45" 
+                                stroke="${circleColor}"
+                                stroke-dasharray="${masteryPercent * 2.83} 283"
+                                stroke-dashoffset="0"/>
+                        </svg>
+                        <div class="mastery-content">
+                            <span class="mastery-value" data-target="${masteryPercent}">0%</span>
+                            <span class="mastery-label">Maîtrise</span>
                         </div>
                     </div>
                 </div>
                 
-                <div>
-                    <h3 style="color: var(--primary-color); margin-bottom: 15px;">Répartition par difficulté</h3>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 12px; height: 12px; border-radius: 50%; background: #4CAF50;"></div>
-                            <span>Facile (30+):</span>
-                            <span style="margin-left: auto; font-weight: 600;">${cardsEasy}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 12px; height: 12px; border-radius: 50%; background: #FFC107;"></div>
-                            <span>Moyen (20-29):</span>
-                            <span style="margin-left: auto; font-weight: 600;">${cardsMedium}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 12px; height: 12px; border-radius: 50%; background: #FF9800;"></div>
-                            <span>Difficile (10-19):</span>
-                            <span style="margin-left: auto; font-weight: 600;">${cardsHard}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 12px; height: 12px; border-radius: 50%; background: #F44336;"></div>
-                            <span>Très difficile (0-9):</span>
-                            <span style="margin-left: auto; font-weight: 600;">${cardsVeryHard}</span>
+                <!-- Stats générales avec icônes -->
+                <div class="stats-general">
+                    <div class="stat-item stat-cards">
+                        <div class="stat-icon">${Icons.getIcon('card', 20, 'var(--primary-color)')}</div>
+                        <span class="stat-value">${totalCards}</span>
+                        <span class="stat-label">Cartes</span>
+                    </div>
+                    <div class="stat-item stat-due">
+                        <div class="stat-icon">${Icons.getIcon('clock', 20, 'var(--warning)')}</div>
+                        <span class="stat-value">${cardsDue}</span>
+                        <span class="stat-label">À réviser</span>
+                    </div>
+                    <div class="stat-item stat-today">
+                        <div class="stat-icon">${Icons.getIcon('success', 20, 'var(--success)')}</div>
+                        <span class="stat-value">${reviewsToday}</span>
+                        <span class="stat-label">Aujourd'hui</span>
+                    </div>
+                </div>
+                
+                <!-- Barres de répartition animées -->
+                <div class="stats-distribution">
+                    <h4>Répartition par difficulté</h4>
+                    
+                    <div class="distribution-bar-container">
+                        <div class="distribution-bar">
+                            <div class="bar-segment bar-easy animate-bar" style="--target-width: ${easyPercent}%" title="Facile: ${cardsEasy}"></div>
+                            <div class="bar-segment bar-medium animate-bar" style="--target-width: ${mediumPercent}%" title="Moyen: ${cardsMedium}"></div>
+                            <div class="bar-segment bar-hard animate-bar" style="--target-width: ${hardPercent}%" title="Difficile: ${cardsHard}"></div>
+                            <div class="bar-segment bar-very-hard animate-bar" style="--target-width: ${veryHardPercent}%" title="Très difficile: ${cardsVeryHard}"></div>
                         </div>
                     </div>
+                    
+                    <div class="distribution-legend">
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background: #4CAF50;"></span>
+                            <span class="legend-label">Facile</span>
+                            <span class="legend-value">${cardsEasy}</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background: #FFC107;"></span>
+                            <span class="legend-label">Moyen</span>
+                            <span class="legend-value">${cardsMedium}</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background: #FF9800;"></span>
+                            <span class="legend-label">Difficile</span>
+                            <span class="legend-value">${cardsHard}</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background: #F44336;"></span>
+                            <span class="legend-label">Très difficile</span>
+                            <span class="legend-value">${cardsVeryHard}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Score moyen -->
+                <div class="stats-score-avg">
+                    <div class="score-avg-label">Score moyen</div>
+                    <div class="score-avg-bar">
+                        <div class="score-avg-fill animate-bar" style="--target-width: ${Math.min(avgScore, 50) * 2}%"></div>
+                    </div>
+                    <div class="score-avg-value">${avgScore} pts</div>
                 </div>
             </div>
         `;
         
         this.showModalWithContent('Statistiques', content);
+        
+        // Animer les éléments après l'affichage
+        setTimeout(() => {
+            this.animateStatsModal(masteryPercent);
+        }, 100);
+    },
+    
+    animateStatsModal(targetPercent) {
+        // Animer le pourcentage de maîtrise
+        const masteryValue = document.querySelector('.mastery-value');
+        if (masteryValue) {
+            let current = 0;
+            const duration = 1000;
+            const increment = targetPercent / (duration / 16);
+            
+            const animate = () => {
+                current += increment;
+                if (current >= targetPercent) {
+                    masteryValue.textContent = targetPercent + '%';
+                } else {
+                    masteryValue.textContent = Math.round(current) + '%';
+                    requestAnimationFrame(animate);
+                }
+            };
+            requestAnimationFrame(animate);
+        }
+        
+        // Animer les barres de distribution
+        document.querySelectorAll('.animate-bar').forEach((bar, index) => {
+            setTimeout(() => {
+                const targetWidth = bar.style.getPropertyValue('--target-width');
+                bar.style.width = targetWidth;
+            }, index * 100);
+        });
     },
     
     exportDeck() {
@@ -2899,7 +3092,24 @@ const App = {
                     
                     // Demander la permission de notification si nécessaire
                     this.requestNotificationPermission().then(async () => {
-                        // Envoyer un message au service worker pour ajouter le rappel
+                        // S'abonner aux push notifications pour les rappels en arrière-plan
+                        if (this.pushNotificationsEnabled) {
+                            try {
+                                await PushNotifications.subscribe();
+                                // Ajouter le rappel au serveur pour les notifications en arrière-plan
+                                await PushNotifications.addReminder({
+                                    id: reminderId,
+                                    deckId: deckId,
+                                    deckName: deckName,
+                                    intervalMinutes: intervalMinutes
+                                });
+                                console.log('Rappel ajouté au serveur push');
+                            } catch (error) {
+                                console.log('Erreur push notifications:', error);
+                            }
+                        }
+                        
+                        // Envoyer un message au service worker pour ajouter le rappel (fallback local)
                         if ('serviceWorker' in navigator) {
                             try {
                                 const registration = await navigator.serviceWorker.ready;
@@ -2955,9 +3165,9 @@ const App = {
                 });
             }
             
-            // Event listeners pour supprimer les rappels (déjà attaché plus haut, mais on le garde pour compatibilité)
+            // Event listeners pour supprimer les rappels
             document.querySelectorAll('.btn-remove-reminder').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', async (e) => {
                     const index = parseInt(e.target.getAttribute('data-reminder-index'));
                     // Récupérer le rappel AVANT de le supprimer du tableau
                     const removedReminder = savedReminders[index];
@@ -2965,6 +3175,16 @@ const App = {
                     
                     savedReminders.splice(index, 1);
                     localStorage.setItem('flashcards_reminders', JSON.stringify(savedReminders));
+                    
+                    // Supprimer du serveur push
+                    if (this.pushNotificationsEnabled) {
+                        try {
+                            await PushNotifications.removeReminder(removedReminder);
+                            console.log('Rappel supprimé du serveur push');
+                        } catch (error) {
+                            console.log('Erreur suppression serveur:', error);
+                        }
+                    }
                     
                     // Envoyer un message au service worker pour supprimer le rappel spécifique
                     if ('serviceWorker' in navigator && removedReminder.id) {
@@ -3236,10 +3456,10 @@ const App = {
                             <p><strong>Comment réviser :</strong> Maintenez un appui long sur un deck et sélectionnez "Réviser", ou utilisez le menu hamburger.</p>
                             <p style="margin-top: 10px;"><strong>Système de révision :</strong> Algorithme intelligent qui privilégie les cartes difficiles. Couleurs selon la difficulté :</p>
                             <ul style="margin-top: 8px; padding-left: 20px; font-size: 14px;">
-                                <li><span style="color: #F44336;">🔴 Rouge</span> : Très difficile</li>
-                                <li><span style="color: #FF9800;">🟠 Orange</span> : Difficile</li>
-                                <li><span style="color: #FFC107;">🟡 Jaune</span> : Moyen</li>
-                                <li><span style="color: #4CAF50;">🟢 Vert</span> : Facile</li>
+                                <li><span class="color-dot" style="background: #F44336;"></span> <span style="color: #F44336;">Rouge</span> : Très difficile</li>
+                                <li><span class="color-dot" style="background: #FF9800;"></span> <span style="color: #FF9800;">Orange</span> : Difficile</li>
+                                <li><span class="color-dot" style="background: #FFC107;"></span> <span style="color: #FFC107;">Jaune</span> : Moyen</li>
+                                <li><span class="color-dot" style="background: #4CAF50;"></span> <span style="color: #4CAF50;">Vert</span> : Facile</li>
                             </ul>
                         </div>
                     </div>
@@ -3344,6 +3564,303 @@ const App = {
     },
     
     // ============================================
+    // SYSTÈME DE TOAST NOTIFICATIONS
+    // ============================================
+    
+    showToast(message, type = 'info', duration = 3000) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        const icons = {
+            success: Icons.getIcon('success', 20, 'white'),
+            error: Icons.getIcon('close', 20, 'white'),
+            info: Icons.getIcon('help', 20, 'white'),
+            warning: Icons.getIcon('bell', 20, 'white')
+        };
+        
+        toast.innerHTML = `
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-message">${this.escapeHtml(message)}</span>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Animation d'entrée
+        requestAnimationFrame(() => {
+            toast.classList.add('toast-show');
+        });
+        
+        // Suppression automatique
+        setTimeout(() => {
+            toast.classList.remove('toast-show');
+            toast.classList.add('toast-hide');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, duration);
+    },
+    
+    // ============================================
+    // MODAL DE CONFIRMATION
+    // ============================================
+    
+    showConfirmModal(title, message, onConfirm, type = 'danger') {
+        const modal = document.getElementById('confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const messageEl = document.getElementById('confirm-modal-message');
+        const iconEl = document.getElementById('confirm-modal-icon');
+        const confirmBtn = document.getElementById('confirm-modal-confirm');
+        const cancelBtn = document.getElementById('confirm-modal-cancel');
+        
+        if (!modal) return;
+        
+        // Configurer le contenu
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        
+        // Icône selon le type
+        const iconColor = type === 'danger' ? 'var(--error)' : 'var(--warning)';
+        iconEl.innerHTML = type === 'danger' 
+            ? Icons.getIcon('delete', 48, iconColor)
+            : Icons.getIcon('help', 48, iconColor);
+        
+        // Configurer le bouton de confirmation
+        confirmBtn.className = type === 'danger' ? 'btn btn-danger' : 'btn btn-primary';
+        
+        // Afficher le modal
+        modal.classList.remove('hidden');
+        
+        // Gestionnaires d'événements
+        const handleConfirm = () => {
+            modal.classList.add('hidden');
+            cleanup();
+            if (onConfirm) onConfirm();
+        };
+        
+        const handleCancel = () => {
+            modal.classList.add('hidden');
+            cleanup();
+        };
+        
+        const handleOverlayClick = (e) => {
+            if (e.target === modal) {
+                handleCancel();
+            }
+        };
+        
+        const cleanup = () => {
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+            modal.removeEventListener('click', handleOverlayClick);
+        };
+        
+        confirmBtn.addEventListener('click', handleConfirm);
+        cancelBtn.addEventListener('click', handleCancel);
+        modal.addEventListener('click', handleOverlayClick);
+    },
+    
+    // ============================================
+    // RECHERCHE ET TRI DES CARTES
+    // ============================================
+    
+    currentSearchQuery: '',
+    currentSortOption: 'default',
+    
+    setupCardToolbar() {
+        const searchInput = document.getElementById('cards-search');
+        const clearBtn = document.getElementById('clear-search');
+        const sortSelect = document.getElementById('cards-sort');
+        const searchIcon = document.querySelector('.search-icon');
+        
+        // Ajouter l'icône de recherche
+        if (searchIcon) {
+            searchIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+        }
+        
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.currentSearchQuery = e.target.value.toLowerCase();
+                if (clearBtn) {
+                    clearBtn.classList.toggle('hidden', !this.currentSearchQuery);
+                }
+                this.renderCards();
+                this.updateSearchResultsCount();
+            });
+        }
+        
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (searchInput) {
+                    searchInput.value = '';
+                    this.currentSearchQuery = '';
+                    clearBtn.classList.add('hidden');
+                    this.renderCards();
+                    this.updateSearchResultsCount();
+                }
+            });
+        }
+        
+        if (sortSelect) {
+            // Restaurer la préférence de tri
+            const savedSort = localStorage.getItem('flashcards_sortOption');
+            if (savedSort) {
+                sortSelect.value = savedSort;
+                this.currentSortOption = savedSort;
+            }
+            
+            sortSelect.addEventListener('change', (e) => {
+                this.currentSortOption = e.target.value;
+                localStorage.setItem('flashcards_sortOption', this.currentSortOption);
+                this.renderCards();
+            });
+        }
+    },
+    
+    updateSearchResultsCount() {
+        const searchContainer = document.querySelector('.search-container');
+        if (!searchContainer) return;
+        
+        // Supprimer l'ancien compteur
+        const existingCount = searchContainer.querySelector('.search-results-count');
+        if (existingCount) {
+            existingCount.remove();
+        }
+        
+        // Si pas de recherche, ne pas afficher le compteur
+        if (!this.currentSearchQuery) return;
+        
+        // Compter les résultats
+        const deck = this.getCurrentDeck();
+        if (!deck) return;
+        
+        const filtered = this.filterAndSortCards(deck.cards);
+        const count = filtered.length;
+        const total = deck.cards.length;
+        
+        // Créer le compteur
+        const countEl = document.createElement('span');
+        countEl.className = 'search-results-count';
+        countEl.textContent = `${count}/${total}`;
+        searchContainer.appendChild(countEl);
+    },
+    
+    filterAndSortCards(cards) {
+        let filtered = [...cards];
+        
+        // Filtrer par recherche
+        if (this.currentSearchQuery) {
+            filtered = filtered.filter(card => {
+                const front = (card.front || '').toLowerCase();
+                const back = (card.back || '').toLowerCase();
+                return front.includes(this.currentSearchQuery) || back.includes(this.currentSearchQuery);
+            });
+        }
+        
+        // Trier
+        switch (this.currentSortOption) {
+            case 'score-asc':
+                filtered.sort((a, b) => (a.cardScore || 0) - (b.cardScore || 0));
+                break;
+            case 'score-desc':
+                filtered.sort((a, b) => (b.cardScore || 0) - (a.cardScore || 0));
+                break;
+            case 'alpha-asc':
+                filtered.sort((a, b) => (a.front || '').localeCompare(b.front || ''));
+                break;
+            case 'alpha-desc':
+                filtered.sort((a, b) => (b.front || '').localeCompare(a.front || ''));
+                break;
+            case 'review':
+                filtered.sort((a, b) => (a.nextReview || 0) - (b.nextReview || 0));
+                break;
+            default:
+                // Ordre par défaut (pas de tri supplémentaire)
+                break;
+        }
+        
+        return filtered;
+    },
+    
+    // ============================================
+    // TAGS / CATÉGORIES POUR LES DECKS
+    // ============================================
+    
+    currentTagFilter: 'all',
+    
+    getAllTags() {
+        const decks = Storage.getDecks();
+        const tags = new Set();
+        decks.forEach(deck => {
+            if (deck.tags && Array.isArray(deck.tags)) {
+                deck.tags.forEach(tag => tags.add(tag));
+            }
+        });
+        return Array.from(tags).sort();
+    },
+    
+    renderTagsFilter() {
+        const container = document.getElementById('tags-filter-scroll');
+        if (!container) return;
+        
+        const tags = this.getAllTags();
+        
+        // Si pas de tags, cacher le conteneur
+        const filterContainer = document.getElementById('tags-filter-container');
+        if (filterContainer) {
+            filterContainer.style.display = tags.length > 0 ? 'block' : 'none';
+        }
+        
+        if (tags.length === 0) return;
+        
+        container.innerHTML = `
+            <button class="tag-filter-btn ${this.currentTagFilter === 'all' ? 'active' : ''}" data-tag="all">Tous</button>
+            ${tags.map(tag => `
+                <button class="tag-filter-btn ${this.currentTagFilter === tag ? 'active' : ''}" data-tag="${this.escapeHtml(tag)}">
+                    ${this.escapeHtml(tag)}
+                </button>
+            `).join('')}
+        `;
+        
+        // Event listeners
+        container.querySelectorAll('.tag-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.currentTagFilter = btn.dataset.tag;
+                container.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.renderDecks();
+            });
+        });
+    },
+    
+    filterDecksByTag(decks) {
+        if (this.currentTagFilter === 'all') return decks;
+        return decks.filter(deck => 
+            deck.tags && Array.isArray(deck.tags) && deck.tags.includes(this.currentTagFilter)
+        );
+    },
+    
+    // ============================================
+    // MODE DE RÉVISION INVERSÉ
+    // ============================================
+    
+    isReversedMode: false,
+    
+    getReversedModeSetting() {
+        const saved = localStorage.getItem('flashcards_reversedMode');
+        return saved === 'true';
+    },
+    
+    setReversedModeSetting(value) {
+        localStorage.setItem('flashcards_reversedMode', value.toString());
+        this.isReversedMode = value;
+    },
+    
+    // ============================================
     // UTILITAIRES
     // ============================================
     
@@ -3354,6 +3871,15 @@ const App = {
         const div = document.createElement('div');
         div.textContent = String(text);
         return div.innerHTML;
+    },
+    
+    // Ajouter un effet de feedback visuel sur un bouton
+    addButtonFeedback(button) {
+        if (!button) return;
+        button.classList.add('clicked');
+        setTimeout(() => {
+            button.classList.remove('clicked');
+        }, 200);
     }
 };
 
