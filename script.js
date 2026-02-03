@@ -810,6 +810,40 @@ const App = {
                     { front: "Exemple lancer dé répété", back: "Expériences identiques et indépendantes" },
                     { front: "Exemple tirage avec remise", back: "Urne : 10 tirages avec remise = schéma de Bernoulli" }
                 ]
+            },
+            {
+                id: 'base-cours-php',
+                name: 'Cours PHP',
+                cards: [
+                    { front: "Balises PHP", back: "<?php ... ?>" },
+                    { front: "Afficher", back: "echo \"texte\";" },
+                    { front: "Variable", back: "$nom = \"valeur\";" },
+                    { front: "Fin instruction", back: ";" },
+                    { front: "Commentaire 1 ligne", back: "// commentaire" },
+                    { front: "Commentaire multi", back: "/* ... */" },
+                    { front: "Inclusion", back: "include(\"fichier.php\");" },
+                    { front: "Paramètre URL", back: "$_GET['param']" },
+                    { front: "Condition", back: "if (...) { } else { }" },
+                    { front: "Choix multiple", back: "switch ($var) { case: ... break; }" }
+                ]
+            },
+            {
+                id: 'base-site-oral-php',
+                name: 'Site oral PHP',
+                cards: [
+                    { front: "Inclusion", back: "require_once 'fichier.php';" },
+                    { front: "Paramètres URL", back: "$_GET['param']" },
+                    { front: "Formulaire", back: "$_POST['champ']" },
+                    { front: "Session", back: "session_start() + $_SESSION" },
+                    { front: "JSON lire", back: "json_decode(file_get_contents('php://input'), true)" },
+                    { front: "JSON envoyer", back: "echo json_encode($data);" },
+                    { front: "BDD requête", back: "$pdo->prepare(\"SELECT * FROM t WHERE x = ?\")" },
+                    { front: "BDD exécuter", back: "$stmt->execute([$valeur])" },
+                    { front: "BDD récupérer", back: "$stmt->fetch()" },
+                    { front: "Hash password", back: "password_hash($pwd, PASSWORD_DEFAULT)" },
+                    { front: "Vérif password", back: "password_verify($pwd, $hash)" },
+                    { front: "Upload fichier", back: "move_uploaded_file($tmp, $dest)" }
+                ]
             }
         ];
     },
@@ -1345,7 +1379,7 @@ const App = {
                         e.preventDefault();
                         e.stopPropagation();
                         if (action === 'edit') {
-                            this.editCard(cardIndex);
+                            this.showEditCardModal(cardIndex);
                         } else if (action === 'delete') {
                             this.deleteCard(cardIndex);
                         }
@@ -2182,8 +2216,8 @@ const App = {
             }, 10);
         });
         
-        // Attacher l'event listener immédiatement (ne pas attendre l'animation)
-        requestAnimationFrame(() => {
+        // Attacher l'event listener après que le modal soit rendu
+        setTimeout(() => {
             const form = document.getElementById('add-card-form');
             if (!form) {
                 console.error('Formulaire add-card-form non trouvé');
@@ -2191,8 +2225,8 @@ const App = {
             }
             
             // Gérer les uploads d'images
-            const frontImageInput = form.querySelector('#new-card-front-image');
-            const backImageInput = form.querySelector('#new-card-back-image');
+            const frontImageInput = document.getElementById('new-card-front-image');
+            const backImageInput = document.getElementById('new-card-back-image');
             
             if (frontImageInput) {
                 frontImageInput.addEventListener('change', (e) => {
@@ -2261,7 +2295,7 @@ const App = {
                 submitBtn._clickHandler = handleSubmit;
                 submitBtn.addEventListener('click', handleSubmit);
             }
-        }, 50);
+        }, 100);
     },
     
     addCard() {
@@ -2332,7 +2366,44 @@ const App = {
         this.hideModal();
     },
     
-    handleImageUpload(file, side) {
+    // Fonction de compression d'image
+    compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Calculer les nouvelles dimensions
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+                    
+                    // Créer un canvas pour compresser
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Convertir en base64 compressé
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressedBase64);
+                };
+                img.onerror = () => reject(new Error('Erreur lors du chargement de l\'image'));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier'));
+            reader.readAsDataURL(file);
+        });
+    },
+    
+    async handleImageUpload(file, side) {
         if (!file) return;
         
         // Vérifier le type de fichier
@@ -2341,19 +2412,19 @@ const App = {
             return;
         }
         
-        // Vérifier la taille (max 5MB)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        // Vérifier la taille (max 10MB avant compression)
+        const maxSize = 10 * 1024 * 1024; // 10MB
         if (file.size > maxSize) {
-            alert('L\'image est trop grande. Veuillez sélectionner une image de moins de 5MB.');
+            alert('L\'image est trop grande. Veuillez sélectionner une image de moins de 10MB.');
             return;
         }
         
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const base64 = e.target.result;
+        try {
+            // Compresser l'image
+            const base64 = await this.compressImage(file, 800, 800, 0.7);
+            
             const previewId = side === 'front' ? 'preview-front-img' : 'preview-back-img';
             const previewContainerId = side === 'front' ? 'preview-front-image' : 'preview-back-image';
-            const inputId = side === 'front' ? 'new-card-front-image' : 'new-card-back-image';
             const form = document.getElementById('add-card-form') || document.getElementById('edit-card-form');
             
             // Afficher la prévisualisation
@@ -2373,13 +2444,10 @@ const App = {
                     form.dataset.backImageBase64 = base64;
                 }
             }
-        };
-        
-        reader.onerror = () => {
-            alert('Erreur lors de la lecture de l\'image.');
-        };
-        
-        reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Erreur lors du traitement de l\'image:', error);
+            alert('Erreur lors du traitement de l\'image. Veuillez réessayer.');
+        }
     },
     
     removeImagePreview(side) {
@@ -2423,9 +2491,15 @@ const App = {
         const hasFrontImage = card.frontImage && card.frontImage.trim() !== '';
         const hasBackImage = card.backImage && card.backImage.trim() !== '';
         
+        // Stocker les données de la carte pour l'édition
+        this._editingCardIndex = cardIndex;
+        this._editingCardData = {
+            frontImage: hasFrontImage ? card.frontImage : '',
+            backImage: hasBackImage ? card.backImage : ''
+        };
+        
         const content = `
             <form id="edit-card-form">
-                <input type="hidden" id="edit-card-index" value="${cardIndex}">
                 <div class="form-group">
                     <label for="edit-card-front">Recto</label>
                     <textarea id="edit-card-front" placeholder="Question ou texte du recto">${this.escapeHtml(card.front || '')}</textarea>
@@ -2438,7 +2512,7 @@ const App = {
                     <input type="file" id="edit-card-front-image" accept="image/*" style="display: none;">
                     <div id="preview-front-image" class="image-preview" style="display: ${hasFrontImage ? 'block' : 'none'};">
                         <img id="preview-front-img" class="preview-image" src="${hasFrontImage ? this.escapeHtml(card.frontImage) : ''}" alt="Aperçu recto">
-                        <button type="button" class="btn-remove-preview" onclick="App.removeImagePreview('front')">×</button>
+                        <button type="button" class="btn-remove-preview" onclick="App.removeEditImagePreview('front')">×</button>
                     </div>
                 </div>
                 <div class="form-group">
@@ -2453,62 +2527,102 @@ const App = {
                     <input type="file" id="edit-card-back-image" accept="image/*" style="display: none;">
                     <div id="preview-back-image" class="image-preview" style="display: ${hasBackImage ? 'block' : 'none'};">
                         <img id="preview-back-img" class="preview-image" src="${hasBackImage ? this.escapeHtml(card.backImage) : ''}" alt="Aperçu verso">
-                        <button type="button" class="btn-remove-preview" onclick="App.removeImagePreview('back')">×</button>
+                        <button type="button" class="btn-remove-preview" onclick="App.removeEditImagePreview('back')">×</button>
                     </div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="App.hideModal()">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-primary" onclick="App.saveEditCard()">Enregistrer</button>
                 </div>
             </form>
         `;
         
         this.showModalWithContent('Modifier la carte', content);
         
-        requestAnimationFrame(() => {
-            const form = document.getElementById('edit-card-form');
-            if (form) {
-                // Initialiser les images existantes dans le formulaire
-                if (hasFrontImage) {
-                    form.dataset.frontImageBase64 = card.frontImage;
-                }
-                if (hasBackImage) {
-                    form.dataset.backImageBase64 = card.backImage;
-                }
-                
-                // Gérer les uploads d'images
-                const frontImageInput = form.querySelector('#edit-card-front-image');
-                const backImageInput = form.querySelector('#edit-card-back-image');
-                
-                if (frontImageInput) {
-                    frontImageInput.addEventListener('change', (e) => {
-                        this.handleImageUpload(e.target.files[0], 'front');
-                    });
-                }
-                
-                if (backImageInput) {
-                    backImageInput.addEventListener('change', (e) => {
-                        this.handleImageUpload(e.target.files[0], 'back');
-                    });
-                }
-                
-                form.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.editCard(cardIndex);
+        // Attacher les événements pour les images
+        setTimeout(() => {
+            const frontImageInput = document.getElementById('edit-card-front-image');
+            const backImageInput = document.getElementById('edit-card-back-image');
+            
+            if (frontImageInput) {
+                frontImageInput.addEventListener('change', (e) => {
+                    this.handleEditImageUpload(e.target.files[0], 'front');
                 });
             }
-        }, 10);
+            
+            if (backImageInput) {
+                backImageInput.addEventListener('change', (e) => {
+                    this.handleEditImageUpload(e.target.files[0], 'back');
+                });
+            }
+        }, 50);
     },
     
-    editCard(cardIndex) {
+    // Gérer l'upload d'image pour l'édition
+    async handleEditImageUpload(file, side) {
+        if (!file) return;
+        
+        if (!file.type.startsWith('image/')) {
+            alert('Veuillez sélectionner un fichier image valide.');
+            return;
+        }
+        
+        try {
+            const base64 = await this.compressImage(file, 800, 800, 0.7);
+            
+            // Stocker dans les données temporaires
+            if (side === 'front') {
+                this._editingCardData.frontImage = base64;
+            } else {
+                this._editingCardData.backImage = base64;
+            }
+            
+            // Afficher la prévisualisation
+            const previewImg = document.getElementById(side === 'front' ? 'preview-front-img' : 'preview-back-img');
+            const previewContainer = document.getElementById(side === 'front' ? 'preview-front-image' : 'preview-back-image');
+            
+            if (previewImg && previewContainer) {
+                previewImg.src = base64;
+                previewContainer.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Erreur lors du traitement de l\'image:', error);
+            alert('Erreur lors du traitement de l\'image.');
+        }
+    },
+    
+    // Supprimer l'image de prévisualisation pour l'édition
+    removeEditImagePreview(side) {
+        if (side === 'front') {
+            this._editingCardData.frontImage = '';
+        } else {
+            this._editingCardData.backImage = '';
+        }
+        
+        const previewContainer = document.getElementById(side === 'front' ? 'preview-front-image' : 'preview-back-image');
+        if (previewContainer) {
+            previewContainer.style.display = 'none';
+        }
+        
+        const input = document.getElementById(side === 'front' ? 'edit-card-front-image' : 'edit-card-back-image');
+        if (input) {
+            input.value = '';
+        }
+    },
+    
+    // Sauvegarder la carte éditée
+    saveEditCard() {
         if (this.currentIsBaseDeck) {
             alert('Les decks de base ne peuvent pas être modifiés.');
             return;
         }
         
-        // Utiliser le paramètre cardIndex ou le récupérer du DOM
-        const index = cardIndex !== undefined ? cardIndex : parseInt(document.getElementById('edit-card-index')?.value || '0', 10);
-        const form = document.getElementById('edit-card-form');
+        const cardIndex = this._editingCardIndex;
+        if (cardIndex === undefined) {
+            alert('Erreur: index de carte non trouvé.');
+            return;
+        }
+        
         const frontEl = document.getElementById('edit-card-front');
         const backEl = document.getElementById('edit-card-back');
         
@@ -2519,31 +2633,42 @@ const App = {
         
         const front = (frontEl.value || '').trim();
         const back = (backEl.value || '').trim();
-        const frontImageBase64 = form ? (form.dataset.frontImageBase64 || '') : '';
-        const backImageBase64 = form ? (form.dataset.backImageBase64 || '') : '';
+        const frontImage = this._editingCardData ? this._editingCardData.frontImage : '';
+        const backImage = this._editingCardData ? this._editingCardData.backImage : '';
         
-        // Vérifier qu'il y a au moins du contenu (texte ou image) de chaque côté
-        const hasFrontContent = front.length > 0 || frontImageBase64.length > 0;
-        const hasBackContent = back.length > 0 || backImageBase64.length > 0;
-        
-        if (!hasFrontContent || !hasBackContent) {
-            alert('Veuillez remplir au moins un champ (texte ou image) pour chaque côté de la carte.');
+        // Vérifier qu'il y a au moins du contenu de chaque côté
+        if (!front && !frontImage) {
+            alert('Veuillez remplir le recto (texte ou image).');
+            return;
+        }
+        if (!back && !backImage) {
+            alert('Veuillez remplir le verso (texte ou image).');
             return;
         }
         
         const deck = this.getCurrentDeck();
-        if (!deck || !deck.cards || !deck.cards[index]) {
+        if (!deck || !deck.cards || !deck.cards[cardIndex]) {
             alert('Erreur: carte non trouvée.');
             return;
         }
         
-        deck.cards[index].front = front;
-        deck.cards[index].back = back;
-        deck.cards[index].frontImage = frontImageBase64;
-        deck.cards[index].backImage = backImageBase64;
+        deck.cards[cardIndex].front = front;
+        deck.cards[cardIndex].back = back;
+        deck.cards[cardIndex].frontImage = frontImage;
+        deck.cards[cardIndex].backImage = backImage;
         Storage.saveDeck(deck);
+        
+        // Nettoyer les données temporaires
+        this._editingCardIndex = undefined;
+        this._editingCardData = null;
+        
         this.renderCards();
         this.hideModal();
+    },
+    
+    // Ancienne fonction conservée pour compatibilité
+    editCard(cardIndex) {
+        this.saveEditCard();
     },
     
     deleteCard(index) {

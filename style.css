@@ -120,7 +120,7 @@ header {
     top: 0;
     left: 0;
     right: 0;
-    z-index: 100;
+    z-index: 1000;
     height: 56px;
     box-sizing: border-box;
     flex-shrink: 0;
@@ -167,7 +167,7 @@ header {
     justify-content: center;
     align-items: center;
     gap: 15px;
-    padding: 20px 20px;
+    padding: 15px 20px;
     background: var(--background);
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
@@ -175,9 +175,9 @@ header {
     top: 56px;
     left: 0;
     right: 0;
-    z-index: 99;
+    z-index: 999;
     flex-shrink: 0;
-    margin-top: 8px;
+    margin-top: 0;
 }
 
 .deck-section-btn {
@@ -304,8 +304,10 @@ header {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-top: 130px; /* Espace pour header + sections (augmenté) */
+    padding-top: 130px; /* Espace pour header (56px) + sections (~70px) */
     min-height: 0; /* Permet au flex de fonctionner correctement */
+    position: relative;
+    z-index: 1;
 }
 
 .deck-card {
@@ -2354,13 +2356,13 @@ header {
 
 .tags-filter-container {
     position: fixed;
-    top: 135px;
+    top: 116px; /* header (56px) + sections (~60px) */
     left: 0;
     right: 0;
-    z-index: 98;
+    z-index: 998;
     background: var(--background);
-    padding: 10px 15px;
-    border-bottom: 1px solid var(--border-light);
+    padding: 12px 15px 14px 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .tags-filter-scroll {
@@ -2514,10 +2516,10 @@ header {
 
 .cards-toolbar {
     position: fixed;
-    top: 80px;
+    top: 56px;
     left: 0;
     right: 0;
-    z-index: 99;
+    z-index: 999;
     background: var(--background);
     padding: 10px 15px;
     display: flex;
@@ -2855,7 +2857,7 @@ header {
     
     .cards-list {
         padding: 10px;
-        padding-top: 115px;
+        padding-top: 125px;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
     }
@@ -2943,8 +2945,8 @@ header {
     }
     
     .tags-filter-container {
-        top: 125px;
-        padding: 8px 10px;
+        top: 106px; /* header (50px) + sections (~56px) */
+        padding: 10px 10px 12px 10px;
     }
     
     .tag-filter-btn {
@@ -2954,7 +2956,7 @@ header {
     
     .deck-sections {
         top: 50px;
-        padding: 12px 10px;
+        padding: 10px 10px;
         gap: 8px;
     }
     
@@ -2965,7 +2967,7 @@ header {
     }
     
     .decks-section-content {
-        padding-top: 170px;
+        padding-top: 115px; /* header (50px) + sections (~60px) */
     }
     
     .decks-grid {
@@ -3078,7 +3080,7 @@ header {
     }
     
     .cards-list {
-        padding-top: 140px;
+        padding-top: 160px;
     }
     
     .deck-section-btn {
