@@ -1048,15 +1048,50 @@ const App = {
     }, 50);
   },
 
-  addCardWithValues(front, back, frontImage = '', backImage = '') {
-    if (this.currentIsBaseDeck) return;
-    const deck = this.getCurrentDeck();
-    if (!deck) return;
-    deck.cards.push({ front, back, frontImage, backImage, cardScore: 0, againCount: 0, nextReview: null, easeFactor: 2.5, interval: 0, repetitions: 0 });
-    StorageManager.saveDeck(deck);
-    this.renderCards(); this.hideModal();
-    this.showToast('Carte créée', 'success');
-  },
+  async addCardWithValues(front, back, frontImage, backImage) {
+  if (this.currentIsBaseDeck) return;
+  const deck = this.getCurrentDeck();
+  if (!deck) return;
+
+  // Génère un ID unique pour la carte (utilisé pour le nom du fichier)
+  const cardId = Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+  // Upload des images si présentes
+  let uploadedFrontUrl = frontImage;
+  let uploadedBackUrl  = backImage;
+
+  try {
+    if (frontImage && frontImage.startsWith('data:image')) {
+      uploadedFrontUrl = await SupabaseStorage.uploadImage(frontImage, cardId, 'front');
+    }
+    if (backImage && backImage.startsWith('data:image')) {
+      uploadedBackUrl  = await SupabaseStorage.uploadImage(backImage, cardId, 'back');
+    }
+  } catch (e) {
+    this.showToast('Erreur lors de l\'upload de l\'image', 'error');
+    return;
+  }
+
+  const newCard = {
+    id: cardId,
+    front,
+    back,
+    frontImage: uploadedFrontUrl || '',
+    backImage:  uploadedBackUrl  || '',
+    cardScore: 0,
+    againCount: 0,
+    nextReview: null,
+    easeFactor: 2.5,
+    interval: 0,
+    repetitions: 0
+  };
+
+  deck.cards.push(newCard);
+  StorageManager.saveDeck(deck);
+  this.renderCards();
+  this.hideModal();
+  this.showToast('Carte créée', 'success');
+},
 
   showEditCardModal(cardIndex) {
     if (this.currentIsBaseDeck) return;
@@ -1101,23 +1136,43 @@ const App = {
     }, 50);
   },
 
-  saveEditCard() {
-    const idx = this._editingCardIndex;
-    if (idx === undefined) return;
-    const front = document.getElementById('edit-card-front')?.value.trim() ?? '';
-    const back  = document.getElementById('edit-card-back')?.value.trim()  ?? '';
-    const fi    = this._editingCardData?.frontImage ?? '';
-    const bi    = this._editingCardData?.backImage  ?? '';
-    if (!front && !fi) { this.showToast('Recto requis.', 'error'); return; }
-    if (!back  && !bi) { this.showToast('Verso requis.', 'error'); return; }
-    const deck = this.getCurrentDeck();
-    if (!deck?.cards[idx]) return;
-    Object.assign(deck.cards[idx], { front, back, frontImage: fi, backImage: bi });
-    StorageManager.saveDeck(deck);
-    this._editingCardIndex = undefined; this._editingCardData = null;
-    this.renderCards(); this.hideModal();
-    this.showToast('Carte modifiée', 'success');
-  },
+  async saveEditCard() {
+  const idx = this._editingCardIndex;
+  if (idx === undefined) return;
+
+  const front = document.getElementById('edit-card-front')?.value.trim() ?? '';
+  const back  = document.getElementById('edit-card-back')?.value.trim()  ?? '';
+  let fi      = this._editingCardData?.frontImage ?? '';
+  let bi      = this._editingCardData?.backImage  ?? '';
+
+  if (!front && !fi) { this.showToast('Recto requis.', 'error'); return; }
+  if (!back  && !bi) { this.showToast('Verso requis.', 'error'); return; }
+
+  const deck = this.getCurrentDeck();
+  if (!deck?.cards[idx]) return;
+  const card = deck.cards[idx];
+
+  // Upload des nouvelles images si elles ne sont pas déjà des URLs
+  try {
+    if (fi && fi.startsWith('data:image')) {
+      fi = await SupabaseStorage.uploadImage(fi, card.id, 'front');
+    }
+    if (bi && bi.startsWith('data:image')) {
+      bi = await SupabaseStorage.uploadImage(bi, card.id, 'back');
+    }
+  } catch (e) {
+    this.showToast('Erreur lors de l\'upload de l\'image', 'error');
+    return;
+  }
+
+  Object.assign(card, { front, back, frontImage: fi, backImage: bi });
+  StorageManager.saveDeck(deck);
+  this._editingCardIndex = undefined;
+  this._editingCardData = null;
+  this.renderCards();
+  this.hideModal();
+  this.showToast('Carte modifiée', 'success');
+},
 
   deleteCard(index) {
     if (this.currentIsBaseDeck) return;
