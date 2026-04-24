@@ -1,17 +1,12 @@
 // ============================================================
 // script.js — ShardCards (ES Module, refactorisé)
 // ============================================================
-// Importe StorageManager (façade hybride local + Supabase)
-// et AuthService (authentification Supabase)
-// ============================================================
-
 import { StorageManager } from './storage-manager.js';
 import { AuthService }    from './supabase-client.js';
 
 // ============================================================
 // UTILITAIRES
 // ============================================================
-
 function debounce(fn, delay = 250) {
   let timer;
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
@@ -24,10 +19,6 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/**
- * Attache un gestionnaire d'appui long sur un élément.
- * Retourne une fonction de nettoyage.
- */
 function addLongPress(el, onLongPress, onClick, delay = 500) {
   let timer = null, fired = false, startTime = 0;
   const start  = e => { fired = false; startTime = Date.now(); timer = setTimeout(() => { fired = true; e.preventDefault(); onLongPress(e); }, delay); };
@@ -93,7 +84,6 @@ const SM2 = {
     const now = Date.now();
     card.easeFactor  ??= 2.5; card.interval ??= 1;
     card.repetitions ??= 0;   card.againCount ??= 0; card.cardScore ??= 0;
-
     if (quality === 0) {
       card.againCount++; card.cardScore = Math.max(0, card.cardScore - 10);
       card.interval = 1; card.repetitions = 0;
@@ -109,7 +99,6 @@ const SM2 = {
     card.lastReview = now;
     return card;
   },
-
   getCardsToReview(deck, limit = null) {
     const now = Date.now();
     const scored = deck.cards.map(card => {
@@ -128,18 +117,8 @@ const SM2 = {
 // ZONES DE COULEURS
 // ============================================================
 const ColorZones = {
-  getCardColor(score) {
-    if (score < 10) return '#F44336';
-    if (score < 20) return '#FF9800';
-    if (score < 30) return '#FFC107';
-    return '#4CAF50';
-  },
-  getZoneName(score) {
-    if (score < 10) return 'Très difficile';
-    if (score < 20) return 'Difficile';
-    if (score < 30) return 'Moyen';
-    return 'Facile';
-  }
+  getCardColor(score) { if (score < 10) return '#F44336'; if (score < 20) return '#FF9800'; if (score < 30) return '#FFC107'; return '#4CAF50'; },
+  getZoneName(score) { if (score < 10) return 'Très difficile'; if (score < 20) return 'Difficile'; if (score < 30) return 'Moyen'; return 'Facile'; }
 };
 
 // ============================================================
@@ -160,56 +139,35 @@ const App = {
   currentSortOption: 'default',
   currentTagFilter: 'all',
   currentMenuActions: [],
-  _cardCleanupFns: [],   // fonctions de nettoyage des long-press
+  _cardCleanupFns: [],
   _remindersSynced: false,
 
   // ---- Init ----
-
   async init() {
-    // Préférences
     this.cardsPerSession = parseInt(localStorage.getItem('flashcards_cardsPerSession') || '10') || 10;
     this.isReversedMode  = localStorage.getItem('flashcards_reversedMode') === 'true';
     const savedSort      = localStorage.getItem('flashcards_sortOption');
     if (savedSort) this.currentSortOption = savedSort;
-
-    // Thème
     this.initDarkMode();
-
-    // Icônes statiques
     this.initIcons();
-
-    // Auth
     this.initAuth();
-
-    // Événements
     this.setupEventListeners();
     this.setupCardToolbar();
-
-    // Rendu initial
     this.renderDecks();
     this.renderTagsFilter();
-
-    // Assurer FAB visible
     const addDeckBtn = document.getElementById('add-deck-btn');
     if (addDeckBtn) addDeckBtn.style.display = 'flex';
-
-    // PWA / SW
     this.registerServiceWorker();
     this.restoreReviewReminders();
     this.setupServiceWorkerMessageListener();
-
-    // Première visite
     this.checkFirstVisit();
-
-    // Sync post-connexion
-  window.addEventListener('shardcards:synced', () => {
-    this.renderDecks();
-    this.renderTagsFilter();
-    // suppression du toast
-});
+    window.addEventListener('shardcards:synced', () => {
+      this.renderDecks();
+      this.renderTagsFilter();
+    });
+  },
 
   // ---- Mode Sombre ----
-
   initDarkMode() {
     const saved = localStorage.getItem('flashcards_theme');
     if (saved) {
@@ -217,10 +175,8 @@ const App = {
     } else if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
       document.documentElement.setAttribute('data-theme', 'dark');
     }
-    // Mettre à jour la meta theme-color
     this._updateThemeColor();
   },
-
   toggleDarkMode() {
     const current = document.documentElement.getAttribute('data-theme');
     const next    = current === 'dark' ? 'light' : 'dark';
@@ -229,36 +185,27 @@ const App = {
     this._updateThemeColor();
     this.hideHamburgerMenu();
   },
-
   _updateThemeColor() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const meta   = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = isDark ? '#1565C0' : '#2196F3';
   },
-
-  isDarkMode() {
-    return document.documentElement.getAttribute('data-theme') === 'dark';
-  },
+  isDarkMode() { return document.documentElement.getAttribute('data-theme') === 'dark'; },
 
   // ---- Auth ----
-
   initAuth() {
     AuthService.init();
-
     AuthService.onChange((event, user) => {
-        this._updateAuthUI(user);
-
-        if (event === 'SIGNED_IN') {
-            // Toast minimal
-            this.showToast('Connecté', 'success');
-        } else if (event === 'SIGNED_OUT') {
-            this.showToast('Déconnecté', 'info');
-            this.renderDecks();
-        }
+      this._updateAuthUI(user);
+      if (event === 'SIGNED_IN') {
+        this.showToast('Connecté', 'success');
+      } else if (event === 'SIGNED_OUT') {
+        this.showToast('Déconnecté', 'info');
+        this.renderDecks();
+      }
     });
-
     this._updateAuthUI(AuthService.currentUser);
-},
+  },
 
   _updateAuthUI(user) {
     // Indicateur online/cloud dans le header
@@ -1707,6 +1654,4 @@ const App = {
 // Démarrage
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
-
-// Exposer App globalement pour les appels depuis attributs HTML (onclick legacy)
 window.App = App;
