@@ -17,13 +17,18 @@
     <link rel="icon" type="image/png" sizes="1024x1024" href="icon-1024.png">
 </head>
 <body>
+    <!-- Toast de notification simple -->
     <div id="notification-toast" class="notification-toast hidden">
         <div class="notification-toast-content">
             <div class="notification-toast-message" id="notification-toast-message">Il est temps de réviser</div>
             <button id="notification-toast-ok" class="notification-toast-btn">OK</button>
         </div>
     </div>
+    
+    <!-- Toast container pour feedback visuel -->
     <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Modal de confirmation -->
     <div id="confirm-modal" class="confirm-modal-overlay hidden">
         <div class="confirm-modal">
             <div class="confirm-modal-icon" id="confirm-modal-icon"></div>
@@ -35,6 +40,8 @@
             </div>
         </div>
     </div>
+    
+    <!-- Écran principal - Liste des decks -->
     <div id="decks-view" class="view active">
         <header>
             <img src="icon-1024.png" alt="ShardCards" class="header-logo">
@@ -45,6 +52,8 @@
                 </button>
             </div>
         </header>
+        
+        <!-- Sections de navigation -->
         <div class="deck-sections">
             <button class="deck-section-btn active" data-section="my-decks">
                 <span>Mes Decks</span>
@@ -53,12 +62,22 @@
                 <span>Decks de Base</span>
             </button>
         </div>
+        
+        
+        <!-- Conteneur pour Mes Decks -->
         <div id="my-decks-container" class="decks-section-content active">
-            <div id="decks-container" class="decks-grid"></div>
+        <div id="decks-container" class="decks-grid">
+            <!-- Les decks seront ajoutés dynamiquement ici -->
+            </div>
         </div>
+        
+        <!-- Conteneur pour Decks de Base -->
         <div id="base-decks-container" class="decks-section-content">
-            <div id="base-decks-grid" class="decks-grid"></div>
+            <div id="base-decks-grid" class="decks-grid">
+                <!-- Les decks de base seront ajoutés dynamiquement ici -->
+            </div>
         </div>
+        
         <div class="fab-container">
             <button id="help-btn" class="fab help-fab" aria-label="Aide" title="Aide">
                 <span class="icon-svg icon-help"></span>
@@ -68,6 +87,8 @@
             </button>
         </div>
     </div>
+
+    <!-- Écran détail d'un deck -->
     <div id="deck-detail-view" class="view">
         <header>
             <button id="back-btn" class="icon-btn" aria-label="Retour">
@@ -80,6 +101,8 @@
                 </button>
             </div>
         </header>
+        
+        <!-- Barre de recherche et tri -->
         <div class="cards-toolbar">
             <div class="search-container">
                 <span class="search-icon icon-svg"></span>
@@ -97,13 +120,19 @@
                 </select>
             </div>
         </div>
-        <div id="cards-container" class="cards-list"></div>
+        
+        <div id="cards-container" class="cards-list">
+            <!-- Les cartes seront ajoutées dynamiquement ici -->
+        </div>
+        
         <div class="fab-container">
             <button id="add-card-btn" class="fab" aria-label="Ajouter une carte">
                 <span class="icon-svg icon-plus"></span>
             </button>
         </div>
     </div>
+
+    <!-- Écran révision -->
     <div id="review-view" class="view">
         <header>
             <button id="review-back-btn" class="icon-btn" aria-label="Retour">
@@ -112,6 +141,7 @@
             <h1>Révision</h1>
             <div id="review-progress">0 / 0</div>
         </header>
+        
         <div id="review-card" class="review-card">
             <div class="flip-card-inner" id="flip-card-inner">
                 <div id="card-front" class="card-side card-front">
@@ -126,12 +156,15 @@
                 </div>
             </div>
         </div>
+        
         <div id="review-buttons" class="review-buttons hidden">
             <button id="again-btn" class="review-btn again">Encore</button>
             <button id="good-btn" class="review-btn good">Bien</button>
             <button id="easy-btn" class="review-btn easy">Facile</button>
         </div>
     </div>
+
+    <!-- Modals -->
     <div id="modal-overlay" class="modal-overlay hidden">
         <div class="modal">
             <div class="modal-header">
@@ -143,7 +176,11 @@
             </div>
         </div>
     </div>
+
+    <!-- Input file caché pour import -->
     <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+    <!-- Menu hamburger -->
     <div id="hamburger-menu" class="hamburger-menu hidden">
         <div class="hamburger-menu-overlay"></div>
         <div class="hamburger-menu-content">
@@ -151,12 +188,18 @@
                 <h2>Menu</h2>
                 <button id="hamburger-close-btn" class="icon-btn" aria-label="Fermer"><span class="icon-svg icon-close"></span></button>
             </div>
-            <div class="hamburger-menu-items" id="hamburger-menu-items"></div>
+            <div class="hamburger-menu-items" id="hamburger-menu-items">
+                <!-- Les éléments du menu seront ajoutés dynamiquement -->
+            </div>
             <div class="hamburger-menu-footer">
                 <div class="copyright">© 2026 Kenzo Metgy - Tous droits réservés</div>
             </div>
         </div>
     </div>
+
+    <!-- 1. Charge Supabase UMD (fournit window.supabase) -->
     <script src="supabase-umd.js"></script>
+    <!-- 2. Lance l'application principale en module -->
+    <script type="module" src="script.js"></script>
 </body>
 </html>
