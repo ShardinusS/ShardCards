@@ -1,9 +1,12 @@
-import { createClient } from './supabase-js.js';
+// ============================================================
+// supabase-client.js – Utilise la version UMD chargée globalement
+// ============================================================
 
 const SUPABASE_URL = 'https://kwvdseqaljdwqbrjtarh.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_y2EXyAtUtiHgN5RDpofCpA_j_nCHiS1';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// La variable globale supabase est fournie par supabase-umd.js
+export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
