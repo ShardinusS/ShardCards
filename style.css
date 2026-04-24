@@ -70,15 +70,15 @@
 [data-theme="dark"] .card-side,
 [data-theme="dark"] .confirm-modal,
 [data-theme="dark"] .hamburger-menu-content {
-    background: #2C2C2C;
-    color: #E0E0E0;
+    background: var(--surface-elevated);
+    color: var(--text-primary);
 }
 
 [data-theme="dark"] .card-label,
 [data-theme="dark"] .deck-info,
 [data-theme="dark"] .empty-state-text,
 [data-theme="dark"] .help-page-content {
-    color: #B0B0B0;
+    color: var(--text-secondary);
 }
 
 [data-theme="dark"] header {
@@ -402,7 +402,7 @@ header {
 }
 
 .deck-card {
-    background: white;
+    background: var(--surface-elevated);
     border-radius: 12px;
     padding: 20px;
     box-shadow: var(--shadow);
@@ -542,7 +542,7 @@ header {
 
 /* Nouveau design des cartes en grille */
 .card-grid-item {
-    background: white;
+    background: var(--surface-elevated);
     border-radius: 12px;
     padding: 12px;
     box-shadow: 0 2px 8px var(--shadow);
@@ -602,7 +602,7 @@ header {
 }
 
 .card-action-btn-compact {
-    background: white;
+    background: var(--surface-elevated);
     border: 1px solid var(--border);
     padding: 8px 12px;
     border-radius: 8px;
@@ -675,7 +675,7 @@ header {
 
 /* Ancien design (backup) */
 .card-item {
-    background: white;
+    background: var(--surface-elevated);
     border-radius: 12px;
     padding: 0;
     box-shadow: 0 2px 8px var(--shadow);
@@ -947,12 +947,12 @@ header {
 }
 
 .card-front {
-    background: white;
+    background: var(--surface-elevated);
     border-top: 5px solid var(--primary-color);
 }
 
 .card-back {
-    background: white;
+    background: var(--surface-elevated);
     border-top: 5px solid var(--success);
     transform: rotateY(180deg);
 }
@@ -1153,7 +1153,7 @@ header {
 }
 
 .modal {
-    background: white;
+    background: var(--surface-elevated);
     border-radius: 16px;
     width: 100%;
     max-width: 400px;
@@ -1252,6 +1252,8 @@ header {
     border-radius: 8px;
     font-size: 16px;
     font-family: inherit;
+    background: var(--surface-elevated);
+    color: var(--text-primary);
     transition: border-color 0.2s ease;
     /* Permettre la sélection de texte dans les champs de saisie */
     -webkit-user-select: text;
@@ -1554,7 +1556,7 @@ header {
     border-radius: 12px;
     font-size: 16px;
     font-family: inherit;
-    background: white;
+    background: var(--surface-elevated);
     color: var(--text-primary);
     cursor: pointer;
     appearance: none;
@@ -1697,7 +1699,7 @@ header {
     justify-content: space-between;
     align-items: center;
     padding: 16px;
-    background: linear-gradient(135deg, var(--surface) 0%, white 100%);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-elevated) 100%);
     border-radius: 12px;
     margin-bottom: 12px;
     border: 1px solid var(--border);
@@ -1708,7 +1710,7 @@ header {
 }
 
 .reminder-item:hover {
-    background: linear-gradient(135deg, white 0%, var(--surface) 100%);
+    background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface) 100%);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     border-color: var(--primary-color);
 }
@@ -2026,7 +2028,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
     bottom: 0;
     width: 280px;
     max-width: 85vw;
-    background: white;
+    background: var(--surface-elevated);
     box-shadow: -2px 0 15px rgba(0, 0, 0, 0.15);
     display: flex;
     flex-direction: column;
@@ -2312,7 +2314,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: white;
+    background: var(--surface-elevated);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2485,7 +2487,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
 }
 
 .tag-filter-btn {
-    background: white;
+    background: var(--surface-elevated);
     border: 2px solid var(--border);
     color: var(--text-secondary);
     padding: 8px 16px;
@@ -2549,7 +2551,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
     gap: 12px;
     padding: 14px 20px;
     border-radius: 12px;
-    background: white;
+    background: var(--surface-elevated);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     pointer-events: all;
     opacity: 0;
@@ -2670,7 +2672,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
 #cards-search:focus {
     outline: none;
     border-color: var(--primary-color);
-    background: white;
+    background: var(--surface-elevated);
     box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
 }
 
@@ -2730,7 +2732,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
 #cards-sort:focus {
     outline: none;
     border-color: var(--primary-color);
-    background-color: white;
+    background-color: var(--surface-elevated);
 }
 
 /* Compteur de résultats de recherche */
@@ -2784,7 +2786,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
 }
 
 .confirm-modal {
-    background: white;
+    background: var(--surface-elevated);
     border-radius: 20px;
     padding: 30px;
     max-width: 340px;
