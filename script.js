@@ -1068,7 +1068,8 @@ const App = {
       uploadedBackUrl  = await SupabaseStorage.uploadImage(backImage, cardId, 'back');
     }
   } catch (e) {
-    this.showToast('Erreur lors de l\'upload de l\'image', 'error');
+    console.error('Upload image error:', e);   // ← ajoute cette ligne
+    this.showToast('Erreur upload : ' + (e.message || e), 'error');   // ← et celle-ci
     return;
   }
 
