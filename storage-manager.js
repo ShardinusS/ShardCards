@@ -142,8 +142,9 @@ export const StorageManager = {
     const queue = SyncQueue.getAll();
     if (queue.length === 0) return;
 
-    console.log(`[StorageManager] Flushing ${queue.length} queued operation(s)…`);
+    // console.log(`[StorageManager] Flushing ${queue.length} queued operation(s)…`); // LIGNE SUPPRIMÉE
     const failed = [];
+    // ... le reste est inchangé
 
     for (const item of queue) {
       try {
@@ -177,8 +178,9 @@ export const StorageManager = {
   async syncFromCloud() {
     if (!AuthService.isLoggedIn()) return null;
 
-    console.log('[StorageManager] Syncing from cloud…');
+    // console.log('[StorageManager] Syncing from cloud…'); // LIGNE SUPPRIMÉE
     const cloudDecks = await SupabaseStorage.fetchAllDecks();
+    // ...
     const localDecks = LocalStorage.getDecks();
 
     const result = this._mergeDecks(localDecks, cloudDecks);
@@ -230,8 +232,8 @@ export const StorageManager = {
 
 // Retour en ligne → vider la file de sync
 window.addEventListener('online', () => {
-  console.log('[StorageManager] Back online — flushing sync queue…');
-  StorageManager.flushSyncQueue().catch(console.error);
+    // console.log('[StorageManager] Back online — flushing sync queue…'); // SUPPRIMÉ
+    StorageManager.flushSyncQueue().catch(console.error);
 });
 
 // Connexion / déconnexion Supabase

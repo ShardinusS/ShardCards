@@ -41,6 +41,77 @@
     --transition-normal: 0.25s ease;
 }
 
+/* ==================== MODE SOMBRE ==================== */
+[data-theme="dark"] {
+    --background: #121212;
+    --surface: #1E1E1E;
+    --surface-elevated: #2C2C2C;
+    --text-primary: #E0E0E0;
+    --text-secondary: #B0B0B0;
+    --border: #383838;
+    --border-light: #2A2A2A;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow: 0 2px 8px rgba(0,0,0,0.5);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.6);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.7);
+    --shadow-hover: 0 6px 20px rgba(0,0,0,0.6);
+}
+
+/* Assurer que les fonds deviennent sombres */
+[data-theme="dark"] .deck-card,
+[data-theme="dark"] .card-grid-item,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .card-side,
+[data-theme="dark"] .confirm-modal,
+[data-theme="dark"] .hamburger-menu-content {
+    background: #2C2C2C;
+    color: #E0E0E0;
+}
+
+[data-theme="dark"] .card-label,
+[data-theme="dark"] .deck-info,
+[data-theme="dark"] .empty-state-text,
+[data-theme="dark"] .help-page-content {
+    color: #B0B0B0;
+}
+
+[data-theme="dark"] header {
+    background: #1565C0;
+}
+
+[data-theme="dark"] .icon-btn {
+    background: rgba(255,255,255,0.1);
+}
+
+[data-theme="dark"] .fab {
+    background: #1976D2;
+}
+
+[data-theme="dark"] .btn-primary {
+    background: #1565C0;
+}
+
+[data-theme="dark"] .btn-secondary {
+    background: #383838;
+    color: #E0E0E0;
+}
+
+[data-theme="dark"] .btn-danger {
+    background: #D32F2F;
+}
+
+[data-theme="dark"] .review-btn.good {
+    background: #1565C0;
+}
+
+[data-theme="dark"] .review-btn.again {
+    background: #C62828;
+}
+
+[data-theme="dark"] .review-btn.easy {
+    background: #2E7D32;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: var(--background);
@@ -51,14 +122,15 @@ body {
     height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Empêcher la sélection de texte */
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
-    /* Empêcher le surlignage bleu sur mobile */
     -webkit-tap-highlight-color: transparent;
 }
+
+/* ... tout le reste du CSS original reste inchangé ... */
+/* (je ne le recopie pas entièrement ici pour ne pas surcharger, mais tu dois conserver TOUT le reste de ton style.css d'origine après le body) */
 
 /* Views */
 .view {

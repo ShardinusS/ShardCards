@@ -202,12 +202,11 @@ const App = {
     this.checkFirstVisit();
 
     // Sync post-connexion
-    window.addEventListener('shardcards:synced', () => {
-      this.renderDecks();
-      this.renderTagsFilter();
-      this.showToast('Synchronisation cloud terminée', 'success');
-    });
-  },
+  window.addEventListener('shardcards:synced', () => {
+    this.renderDecks();
+    this.renderTagsFilter();
+    // suppression du toast
+});
 
   // ---- Mode Sombre ----
 
@@ -247,18 +246,19 @@ const App = {
     AuthService.init();
 
     AuthService.onChange((event, user) => {
-      this._updateAuthUI(user);
+        this._updateAuthUI(user);
 
-      if (event === 'SIGNED_IN') {
-        this.showToast(`Connecté en tant que ${user.email}`, 'success');
-      } else if (event === 'SIGNED_OUT') {
-        this.showToast('Déconnecté', 'info');
-        this.renderDecks();
-      }
+        if (event === 'SIGNED_IN') {
+            // Toast minimal
+            this.showToast('Connecté', 'success');
+        } else if (event === 'SIGNED_OUT') {
+            this.showToast('Déconnecté', 'info');
+            this.renderDecks();
+        }
     });
 
     this._updateAuthUI(AuthService.currentUser);
-  },
+},
 
   _updateAuthUI(user) {
     // Indicateur online/cloud dans le header
