@@ -4,6 +4,9 @@
 import { StorageManager } from './storage-manager.js';
 import { AuthService }    from './supabase-client.js';
 
+// Après
+import { StorageManager } from './storage-manager.js';
+import { AuthService, SupabaseStorage } from './supabase-client.js';
 // ============================================================
 // UTILITAIRES
 // ============================================================
