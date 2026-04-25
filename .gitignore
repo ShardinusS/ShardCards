@@ -26,6 +26,13 @@ desktop.ini
 # Fichiers de développement local
 .env
 .env.local
+.env.*.local
+
+# Secrets / configuration Supabase locale
+supabase-client.js
+supabase-umd.js
+supabase*.local.js
+*supabase*key*
 
 # Node modules (si vous ajoutez des dépendances plus tard)
 node_modules/
