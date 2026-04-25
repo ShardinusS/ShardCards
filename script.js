@@ -20,6 +20,23 @@
   import { Icons } from './icons.js';
   window.Icons = Icons;
 
+  // Inject icons into DOM with safety for DOM readiness
+  const renderIcons = () => {
+    if (!window.Icons || typeof window.Icons.getIcon !== 'function') return;
+    document.querySelectorAll('.icon-svg').forEach(el => {
+      if (el.innerHTML.trim()) return;
+      const cls = Array.from(el.classList).find(c => c.startsWith('icon-') && c !== 'icon-svg');
+      if (!cls) return;
+      const name = cls.substring(5);
+      el.innerHTML = window.Icons.getIcon(name, 24, 'currentColor');
+    });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderIcons);
+  } else {
+    renderIcons();
+  }
+
   // Now import other modules (they can safely use window.AppState)
   import { UI } from './ui.js';
   import { ReviewSession, SM2, ColorZones } from './review.js';
