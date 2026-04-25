@@ -17,7 +17,7 @@
   window.Utils = Utils;
 
   // Import icons
-  import Icons from './icons.js';
+  import { Icons } from './icons.js';
   window.Icons = Icons;
 
   // Now import other modules (they can safely use window.AppState)
