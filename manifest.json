@@ -1,14 +1,26 @@
 {
   "name": "ShardCards",
   "short_name": "ShardCards",
-  "description": "Application de flashcards avec répétition espacée et notifications de rappel",
+  "description": "Flashcards illimitées avec répétition espacée, offline-first",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#2196F3",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "./icon-1024.png",
       "sizes": "1024x1024",
@@ -17,13 +29,44 @@
     }
   ],
   "categories": ["education", "productivity"],
-  "screenshots": [],
-  "shortcuts": [],
+  "screenshots": [
+    {
+      "src": "./screenshot-decks.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Liste des decks"
+    },
+    {
+      "src": "./screenshot-review.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Session de révision"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Réviser maintenant",
+      "short_name": "Réviser",
+      "description": "Lancer une session de révision",
+      "url": "./index.html?action=review",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nouveau deck",
+      "short_name": "Nouveau",
+      "description": "Créer un nouveau deck",
+      "url": "./index.html?action=new-deck",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+    }
+  ],
   "id": "shardcards-pwa",
   "prefer_related_applications": false,
   "handle_links": "preferred",
   "launch_handler": {
     "client_mode": "focus-existing"
-  }
+  },
+  "lang": "fr-FR"
 }
 

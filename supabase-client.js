@@ -78,7 +78,11 @@ export const SupabaseStorage = {
       id: card.id ?? `${deck.id}_${index}`
     }));
     const { data, error } = await supabase.rpc('sync_deck_with_cards', {
-      p_deck:  deck,
+      p_deck_id: deck.id,
+      p_name: deck.name,
+      p_tags: deck.tags || [],
+      p_created_at: deck.createdAt || Date.now(),
+      p_updated_at: deck.updatedAt || Date.now(),
       p_cards: cardsWithIds
     });
     if (error) throw error;
@@ -103,9 +107,23 @@ export const SupabaseStorage = {
     if (!AuthService.isLoggedIn()) throw new Error('Not authenticated');
     if (!base64DataUrl?.startsWith('data:image')) return base64DataUrl;
     const userId = AuthService.getUserId();
-    const blob   = await fetch(base64DataUrl).then(r => r.blob());
-    const path   = `${userId}/${cardId}_${side}.jpg`;
-    const { error: uploadError } = await supabase.storage.from('card-images').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      return new Blob([u8arr], { type: mime });
+    }
+
+    const blob = dataURLtoBlob(base64DataUrl);
+    const mime = blob.type.split('/')[1] || 'jpeg';
+    const path = `${userId}/${cardId}_${side}.${mime}`;
+    const { error: uploadError } = await supabase.storage.from('card-images').upload(path, blob, { upsert: true, contentType: blob.type });
     if (uploadError) throw uploadError;
     const { data } = supabase.storage.from('card-images').getPublicUrl(path);
     return data.publicUrl;

@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ShardCards">
     <meta name="theme-color" content="#2196F3">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://kwvdseqaljdwqbrjtarh.supabase.co https://*.supabase.co; connect-src 'self' https://kwvdseqaljdwqbrjtarh.supabase.co wss://kwvdseqaljdwqbrjtarh.supabase.co; frame-src 'none'; object-src 'none'; base-uri 'self';">
     <meta name="mobile-web-app-capable" content="yes">
     <title>ShardCards</title>
     <link rel="manifest" href="manifest.json">
@@ -17,14 +18,6 @@
     <link rel="icon" type="image/png" sizes="1024x1024" href="icon-1024.png">
 </head>
 <body>
-    <!-- Toast de notification simple -->
-    <div id="notification-toast" class="notification-toast hidden">
-        <div class="notification-toast-content">
-            <div class="notification-toast-message" id="notification-toast-message">Il est temps de réviser</div>
-            <button id="notification-toast-ok" class="notification-toast-btn">OK</button>
-        </div>
-    </div>
-    
     <!-- Toast container pour feedback visuel -->
     <div id="toast-container" class="toast-container"></div>
     
@@ -47,7 +40,7 @@
             <img src="icon-1024.png" alt="ShardCards" class="header-logo">
             <h1 class="header-title">ShardCards</h1>
             <div class="header-actions">
-                <button id="hamburger-menu-btn" class="icon-btn" aria-label="Menu" title="Menu">
+                <button id="hamburger-menu-btn" class="icon-btn" aria-label="Menu" aria-expanded="false" title="Menu">
                     <span class="icon-svg icon-menu"></span>
                 </button>
             </div>
@@ -116,7 +109,7 @@
                     <option value="score-desc">Difficulté ↓</option>
                     <option value="alpha-asc">A → Z</option>
                     <option value="alpha-desc">Z → A</option>
-                    <option value="review">Prochaine révision</option>
+                    <option value="due">Prochaine révision</option>
                 </select>
             </div>
         </div>
@@ -139,7 +132,7 @@
                 <span class="icon-svg icon-arrow-left"></span>
             </button>
             <h1>Révision</h1>
-            <div id="review-progress">0 / 0</div>
+            <div id="review-progress" class="review-progress-text">0 / 0</div>
         </header>
         
         <div id="review-card" class="review-card">
@@ -158,9 +151,9 @@
         </div>
         
         <div id="review-buttons" class="review-buttons hidden">
-            <button id="again-btn" class="review-btn again">Encore</button>
-            <button id="good-btn" class="review-btn good">Bien</button>
-            <button id="easy-btn" class="review-btn easy">Facile</button>
+            <button id="again-btn" class="review-btn again" aria-label="Encore (1)" title="Encore - Appuyez sur 1">Encore</button>
+            <button id="good-btn" class="review-btn good" aria-label="Bien (2)" title="Bien - Appuyez sur 2">Bien</button>
+            <button id="easy-btn" class="review-btn easy" aria-label="Facile (3)" title="Facile - Appuyez sur 3">Facile</button>
         </div>
     </div>
 
@@ -197,9 +190,9 @@
         </div>
     </div>
 
-    <!-- 1. Charge Supabase UMD (fournit window.supabase) -->
-    <script src="supabase-umd.js"></script>
-    <!-- 2. Lance l'application principale en module -->
+    <!-- 1. Charge Supabase UMD (fournit window.supabase) - defer pour préserver l'ordre d'exécution -->
+    <script src="supabase-umd.js" defer></script>
+    <!-- 2. Lance l'application principale en module (les imports sont résolus dans l'ordre) -->
     <script type="module" src="script.js"></script>
 </body>
 </html>

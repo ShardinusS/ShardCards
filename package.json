@@ -1,9 +1,7 @@
 {
   "name": "shardcards",
   "version": "1.0.0",
-  "description": "Application de flashcards avec notifications push",
+  "description": "PWA de flashcards avec répétition espacée et synchronisation cloud",
   "scripts": {},
-  "dependencies": {
-    "web-push": "^3.6.7"
-  }
+  "dependencies": {}
 }

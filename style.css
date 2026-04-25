@@ -5,6 +5,11 @@
     box-sizing: border-box;
 }
 
+:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
 :root {
     /* Support des safe areas iOS */
     --safe-top: env(safe-area-inset-top, 0px);
@@ -128,10 +133,7 @@ body {
     height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
+    /* Removed global text selection lock to improve accessibility */
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -2122,103 +2124,6 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
     text-align: center;
 }
 
-/* Toast de notification simple (style notification native) */
-.notification-toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10000;
-    background: rgba(33, 33, 33, 0.95);
-    color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
-    min-width: 300px;
-    max-width: 500px;
-    opacity: 0;
-    pointer-events: none;
-    backdrop-filter: blur(10px);
-}
-
-.notification-toast:not(.hidden) {
-    transform: translateX(-50%);
-    opacity: 1;
-    pointer-events: all;
-}
-
-.notification-toast-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    gap: 16px;
-}
-
-.notification-toast-message {
-    flex: 1;
-    font-size: 14px;
-    line-height: 1.4;
-    color: white;
-    word-wrap: break-word;
-}
-
-.notification-toast-btn {
-    flex-shrink: 0;
-    padding: 6px 16px;
-    min-height: 44px;
-    border: none;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    user-select: none;
-}
-
-.notification-toast-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
-
-.notification-toast-btn:active {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-/* Responsive pour mobile */
-@media (max-width: 600px) {
-    .notification-toast {
-        bottom: 10px;
-        left: 10px;
-        right: 10px;
-        min-width: auto;
-        max-width: none;
-        transform: translateX(0);
-    }
-    
-    .notification-toast:not(.hidden) {
-        transform: translateX(0);
-    }
-    
-    .notification-toast-content {
-        padding: 12px 16px;
-        gap: 12px;
-    }
-    
-    .notification-toast-message {
-        font-size: 13px;
-    }
-    
-    .notification-toast-btn {
-        padding: 5px 12px;
-        font-size: 12px;
-    }
-}
-
 /* ============================================
    STATISTIQUES VISUELLES AMÉLIORÉES
    ============================================ */
@@ -2536,7 +2441,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
 
 .toast-container {
     position: fixed;
-    top: 80px;
+    bottom: calc(20px + env(safe-area-inset-bottom));
     right: 20px;
     z-index: 9999;
     display: flex;
@@ -3249,3 +3154,16 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .view,
+    .modal,
+    .toast,
+    .deck-card,
+    .card-grid-item,
+    .review-btn,
+    .fab,
+    .icon-btn {
+        transition: none !important;
+        animation: none !important;
+    }
+}
