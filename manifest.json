@@ -10,13 +10,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "./icon-1024.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "./icon-512.png",
+      "src": "./icon-1024.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -29,36 +29,20 @@
     }
   ],
   "categories": ["education", "productivity"],
-  "screenshots": [
-    {
-      "src": "./screenshot-decks.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Liste des decks"
-    },
-    {
-      "src": "./screenshot-review.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Session de révision"
-    }
-  ],
   "shortcuts": [
     {
       "name": "Réviser maintenant",
       "short_name": "Réviser",
       "description": "Lancer une session de révision",
       "url": "./index.html?action=review",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "./icon-1024.png", "sizes": "192x192" }]
     },
     {
       "name": "Nouveau deck",
       "short_name": "Nouveau",
       "description": "Créer un nouveau deck",
       "url": "./index.html?action=new-deck",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "./icon-1024.png", "sizes": "192x192" }]
     }
   ],
   "id": "shardcards-pwa",

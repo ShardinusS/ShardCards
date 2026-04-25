@@ -3,7 +3,17 @@
 
 const MAX_CARD_TEXT = 1000;
 const MAX_DECK_NAME = 100;
-const { escapeHtml, safeImageUrl } = window.Utils || {};
+const escHtml = window.Utils?.escapeHtml || ((text) => {
+  if (text == null) return '';
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+});
+const safeImageUrl = window.Utils?.safeImageUrl || ((url) => {
+  if (typeof url !== 'string') return '';
+  const t = url.trim();
+  if (t.startsWith('data:image/')) return t;
+  if (/^https?:\/\//i.test(t)) return t;
+  return '';
+});
 
 export const DeckManager = {
   async renderDecks() {
@@ -385,17 +395,5 @@ export const DeckManager = {
     } catch { window.UI.showToast("Erreur d'importation.", 'error'); }
   }
 };
-
-const safeImageUrl = window.Utils?.safeImageUrl || ((url) => {
-  if (typeof url !== 'string') return '';
-  const t = url.trim();
-  if (t.startsWith('data:image/')) return t;
-  if (/^https?:\/\//i.test(t)) return t;
-  return '';
-});
-const escHtml = window.Utils?.escapeHtml || ((text) => {
-  if (text == null) return '';
-  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-});
 
 window.DeckManager = DeckManager;
