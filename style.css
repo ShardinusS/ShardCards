@@ -1140,7 +1140,8 @@ header {
 }
 
 .modal-overlay.hidden {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
 }
 
 @keyframes modalOverlayFadeIn {
@@ -1171,6 +1172,18 @@ header {
     transform: translateY(0) scale(1);
     opacity: 1;
     animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.modal-overlay.hidden .modal {
+    transform: translateY(30px) scale(0.95);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
 }
 
 @keyframes modalSlideUp {
@@ -1767,9 +1780,12 @@ header {
 }
 
 .btn {
-    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 12px 24px;
     min-height: 44px;
+    min-width: 44px;
     border: none;
     border-radius: 8px;
     font-size: 16px;
@@ -1780,9 +1796,16 @@ header {
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     user-select: none;
+    background: var(--primary-color);
+    color: white;
 }
 
-button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
+.btn-default {
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.fab, .icon-btn, .deck-action-btn, .review-btn, .tag-filter-btn,
 .modal-close, .hamburger-menu-item, .clear-search-btn, .btn-import-image,
 .btn-remove-reminder, .card-action-btn-compact {
     min-height: 44px;
