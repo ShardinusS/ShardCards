@@ -1,40 +1,35 @@
-const DEBUG = false;
-let checkInterval = null;
-const CACHE_NAME = 'flashcards-v5';
+const CACHE_NAME = 'flashcards-v3';
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './script.js',
-  './storage-manager.js',
-  './supabase-client.js',
-  './supabase-umd.js',
-  './db.js',
-  './manifest.json',
-  './store.js',
-  './longpress.js',
-  './utils.js',
-  './icons.js',
-  './ui.js',
-  './review.js',
-  './deck-manager.js',
-  './notifications.js',
-  './search-sort.js'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(urlsToCache))
-      .catch((err) => { if (DEBUG) console.error('Erreur lors du cache:', err); })
-    );
+      .catch((err) => console.log('Erreur lors du cache:', err))
+  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
-      caches.keys().then((cacheNames) => Promise.all(cacheNames.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name)))),
-      initDB().catch((err) => { if (DEBUG) console.error('Erreur init DB:', err); })
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('Suppression de l\'ancien cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      initDB().then(() => startPeriodicCheck()).catch(err => console.log('Erreur init DB:', err))
     ])
   );
   return self.clients.claim();
@@ -48,17 +43,20 @@ self.addEventListener('fetch', (event) => {
   
   if (request.mode === 'navigate' || (request.method === 'GET' && request.headers.get('accept') && request.headers.get('accept').includes('text/html'))) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
-            return caches.match('./index.html');
-          });
+      caches.match(new Request('./index.html'))
+        .then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          return fetch(new Request('./index.html'))
+            .then((response) => {
+              if (!response || response.status !== 200) throw new Error('Invalid response');
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(new Request('./index.html'), responseToCache));
+              return response;
+            })
+            .catch(() => new Response(`<h1 style="text-align:center;">Application hors ligne</h1>`, {
+              status: 200,
+              headers: { 'Content-Type': 'text/html; charset=utf-8' }
+            }));
         })
     );
     return;
@@ -66,32 +64,28 @@ self.addEventListener('fetch', (event) => {
   
   event.respondWith(
     caches.match(request)
-      .then((cached) => {
-        if (cached) {
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-            }
-          }).catch(() => {});
-          return cached;
-        }
-
+      .then((response) => {
+        if (response) return response;
         return fetch(request).then((response) => {
-          if (response.ok && response.type === 'basic') {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
+          if (!response || response.status !== 200 || response.type !== 'basic') return response;
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
           return response;
         });
       })
-      .catch(() => new Response('Resource not available offline', { status: 404 }))
+      .catch(() => {
+        if (request.mode === 'navigate') return caches.match('./index.html');
+        return new Response('Resource not available offline', { status: 404, statusText: 'Not Found' });
+      })
   );
 });
 
 // --- Gestion des notifications ---
 
 let db = null;
+let checkInterval = null;
+let wakeUpTimeout = null;
+let isCheckingNotifications = false;
 const recentNotifications = new Map();
 
 function initDB() {
@@ -114,15 +108,46 @@ function initDB() {
 }
 
 async function checkScheduledNotifications() {
+  if (isCheckingNotifications) return 0;
   if (!db) await initDB();
   if (!db) return 0;
-
+  
+  isCheckingNotifications = true;
   const now = Date.now();
   for (const [key, timestamp] of recentNotifications.entries()) {
     if (now - timestamp > 120000) recentNotifications.delete(key);
   }
   
-
+  if ('Notification' in self && 'scheduledNotifications' in self.registration) {
+    try {
+      const scheduledNotifications = await self.registration.scheduledNotifications.getAll();
+      const dueScheduledNotifications = scheduledNotifications.filter(n => n.showTrigger?.timestamp <= now);
+      if (dueScheduledNotifications.length > 0) {
+        for (const scheduledNotif of dueScheduledNotifications) {
+          try {
+            const deckName = scheduledNotif.data?.deckName || scheduledNotif.body?.replace('Il est temps de réviser : ', '') || 'Vos flashcards';
+            const deckId = scheduledNotif.data?.deckId || null;
+            await self.registration.scheduledNotifications.delete(scheduledNotif.id);
+            if (scheduledNotif.data?.reminderId && db) {
+              const transaction = db.transaction(['notifications'], 'readwrite');
+              const store = transaction.objectStore('notifications');
+              const notification = await new Promise((resolve, reject) => {
+                const req = store.get(scheduledNotif.data.reminderId);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+              });
+              if (notification) await scheduleNextNotification(notification);
+            }
+          } catch (error) {
+            console.error('Erreur traitement notif programmée:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Scheduling API non disponible:', error.message);
+    }
+  }
+  
   return new Promise((resolve) => {
     const transaction = db.transaction(['notifications'], 'readwrite');
     const store = transaction.objectStore('notifications');
@@ -152,13 +177,16 @@ async function checkScheduledNotifications() {
               console.error('Erreur affichage notif:', error);
             }
           }
+          scheduleNextWakeUp();
         }
+        isCheckingNotifications = false;
         resolve(notificationsToShow.length);
       }
     };
     
     request.onerror = (error) => {
       console.error('Erreur vérification notifications:', error);
+      isCheckingNotifications = false;
       resolve(0);
     };
   });
@@ -176,37 +204,35 @@ async function scheduleNextNotification(notification) {
   notification.lastNotification = now;
   store.put(notification);
   
-  await scheduleBackgroundSyncForNotification(notification).catch(() => {});
-  await cleanupOldNotifications().catch(() => {});
-}
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
-async function cleanupOldNotifications() {
-  if (!db) return;
-  const cutoff = Date.now() - THIRTY_DAYS_MS;
-  
-  return new Promise((resolve) => {
-    const transaction = db.transaction(['notifications'], 'readwrite');
-    const store = transaction.objectStore('notifications');
-    const index = store.index('nextNotification');
-    const range = IDBKeyRange.upperBound(cutoff);
-    let deleted = 0;
-    
-    const request = index.openCursor(range);
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-      if (cursor) {
-        cursor.delete();
-        deleted++;
-        cursor.continue();
-      } else {
-        if (DEBUG && deleted > 0) console.log(`[SW] Nettoyé ${deleted} anciennes notifications`);
-        resolve(deleted);
+  if ('scheduledNotifications' in self.registration) {
+    try {
+      const scheduledNotifications = await self.registration.scheduledNotifications.getAll();
+      for (const sn of scheduledNotifications) {
+        if (sn.data?.deckId === notification.deckId && sn.data?.reminderId === notification.id) {
+          await self.registration.scheduledNotifications.delete(sn.id);
+        }
       }
-    };
-    request.onerror = () => resolve(0);
-  });
+      await self.registration.scheduledNotifications.schedule({
+        title: 'Rappel de révision',
+        body: `Il est temps de réviser : ${notification.deckName || 'Vos flashcards'}`,
+        icon: './icon-1024.png',
+        badge: './icon-1024.png',
+        tag: `review-reminder-${notification.deckId}-${notification.id}`,
+        data: {
+          url: './index.html',
+          deckId: notification.deckId,
+          reminderId: notification.id,
+          deckName: notification.deckName,
+          timestamp: nextNotification
+        },
+        showTrigger: { timestamp: nextNotification }
+      });
+      return;
+    } catch (error) {
+      console.log('Scheduling API échouée, utilisation Background Sync');
+    }
+  }
+  await scheduleBackgroundSyncForNotification(notification).catch(() => {});
 }
 
 async function scheduleBackgroundSyncForNotification(notification) {
@@ -222,15 +248,10 @@ async function scheduleBackgroundSyncForNotification(notification) {
 }
 
 self.addEventListener('message', async (event) => {
-  if (DEBUG) console.log('Message reçu dans le service worker:', event.data);
+  console.log('Message reçu dans le service worker:', event.data);
   if (!db) await initDB();
   if (!event.data || !event.data.type) return;
-
-  if (event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-    return;
-  }
-
+  
   try {
     if (event.data.type === 'ADD_REMINDER') {
       const { deckId, deckName, intervalMinutes, reminderId } = event.data;
@@ -247,6 +268,7 @@ self.addEventListener('message', async (event) => {
       const { reminderId, deckId } = event.data;
       if (reminderId) await removeReminderById(reminderId);
       else if (deckId) await removeReminder(deckId);
+      await scheduleNextWakeUp();
     } else if (event.data.type === 'UPDATE_REMINDERS') {
       const { reminders } = event.data;
       if (reminders && Array.isArray(reminders)) {
@@ -301,7 +323,7 @@ async function addReminder(deckId, deckName, intervalMinutes, reminderId = null)
         putRequest.onsuccess = async () => {
           notification.id = notification.id || putRequest.result;
           await scheduleNextNotification(notification);
-          // scheduleNextWakeUp removed (not implemented, not needed for basic notifications)
+          await scheduleNextWakeUp();
           resolve({ id: notification.id, isDuplicate: false });
         };
         putRequest.onerror = () => reject(putRequest.error);
@@ -375,24 +397,60 @@ function startPeriodicCheck() {
   if (checkInterval) clearInterval(checkInterval);
   checkScheduledNotifications();
   checkInterval = setInterval(checkScheduledNotifications, 120000);
+  scheduleNextWakeUp();
   if ('sync' in self.registration) {
     self.registration.sync.register('check-notifications').catch(() => {});
+    self.registration.sync.register('check-notifications-backup-1').catch(() => {});
+    self.registration.sync.register('check-notifications-backup-2').catch(() => {});
   }
   if ('periodicSync' in self.registration) {
     self.registration.periodicSync.register('check-notifications-periodic', { minInterval: 60 * 60 * 1000 }).catch(() => {});
   }
 }
 
+async function scheduleNextWakeUp() {
+  if (!db) await initDB();
+  if (!db) return;
+  if (wakeUpTimeout) clearTimeout(wakeUpTimeout);
+  return new Promise((resolve) => {
+    const transaction = db.transaction(['notifications'], 'readonly');
+    const store = transaction.objectStore('notifications');
+    const request = store.getAll();
+    request.onsuccess = async () => {
+      const notifications = request.result || [];
+      if (notifications.length === 0) { resolve(); return; }
+      const now = Date.now();
+      const upcoming = notifications.filter(n => n.nextNotification > now).sort((a,b) => a.nextNotification - b.nextNotification);
+      if (upcoming.length > 0) {
+        const next = upcoming[0];
+        const delay = Math.min(next.nextNotification - now, 24 * 60 * 60 * 1000);
+        if (delay > 0 && delay < 2147483647) {
+          wakeUpTimeout = setTimeout(() => {
+            checkScheduledNotifications().then(() => scheduleNextWakeUp());
+          }, delay);
+        }
+      }
+      resolve();
+    };
+    request.onerror = () => resolve();
+  });
+}
+
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'check-notifications' || event.tag.startsWith('notification-')) {
-    event.waitUntil(checkScheduledNotifications());
+  if (event.tag === 'check-notifications' || event.tag.startsWith('notification-') || event.tag.startsWith('check-notifications-backup-')) {
+    event.waitUntil(checkScheduledNotifications().then(() => {
+      scheduleNextWakeUp();
+      if ('sync' in self.registration) {
+        self.registration.sync.register('check-notifications').catch(() => {});
+      }
+    }));
   }
 });
 
 if ('periodicSync' in self.registration) {
   self.addEventListener('periodicsync', (event) => {
     if (event.tag === 'check-notifications-periodic') {
-      event.waitUntil(checkScheduledNotifications());
+      event.waitUntil(checkScheduledNotifications().then(() => scheduleNextWakeUp()));
     }
   });
 }
@@ -402,7 +460,7 @@ async function showReviewNotification(deckName = 'Vos flashcards', deckId = null
   const title = 'Rappel de révision';
   const options = {
     body: `Il est temps de réviser : ${deckName}`,
-    tag: `review-reminder-${deckId || 'default'}`,
+    tag: `review-reminder-${deckId || 'default'}-${Date.now()}`,
     requireInteraction: false,
     silent: false,
     data: { url: './index.html', deckId, timestamp: Date.now() },
@@ -424,18 +482,16 @@ self.addEventListener('push', (event) => {
     icon: './icon-1024.png',
     badge: './icon-1024.png',
     tag: 'review-reminder',
-    data: { url: './index.html' }
+    data: { url: './' }
   };
   if (event.data) {
     try { data = { ...data, ...event.data.json() }; } catch (e) { data.body = event.data.text() || data.body; }
   }
-  // Use stable tag: if deckId exists, include it; otherwise generic tag
-  const tag = data.deckId ? `review-reminder-${data.deckId}` : 'review-reminder';
   event.waitUntil(self.registration.showNotification(data.title, {
     body: data.body,
     icon: data.icon,
     badge: data.badge,
-    tag: tag,
+    tag: data.tag || `push-${Date.now()}`,
     data: data.data || { url: './' },
     vibrate: [200, 100, 200],
     requireInteraction: false,
@@ -478,9 +534,5 @@ self.addEventListener('pushsubscriptionchange', (event) => {
 });
 
 if (typeof indexedDB !== 'undefined') {
-  initDB().then(() => {
-    startPeriodicCheck();
-    checkScheduledNotifications();
-    cleanupOldNotifications().catch(() => {});
-  }).catch((err) => { if (DEBUG) console.error('Erreur init DB:', err); });
+  initDB().then(() => { startPeriodicCheck(); checkScheduledNotifications(); }).catch(err => console.log('Erreur init DB:', err));
 }
