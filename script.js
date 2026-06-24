@@ -70,7 +70,14 @@ const Icons = {
       user:      `<svg ${s}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
       logout:    `<svg ${s}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
       cloud:     `<svg ${s}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
-      wifi:      `<svg ${s}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`
+      wifi:      `<svg ${s}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`,
+      zap:       `<svg ${s}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+      flame:     `<svg ${s}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+      target:    `<svg ${s}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+      rocket:    `<svg ${s}><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`,
+      award:     `<svg ${s}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`,
+      check:     `<svg ${s}><polyline points="20 6 9 17 4 12"/></svg>`,
+      layers:    `<svg ${s}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`
     };
     return icons[name] ?? '';
   }
@@ -161,45 +168,60 @@ const App = {
     this.restoreReviewReminders();
     this.setupServiceWorkerMessageListener();
     this.checkFirstVisit();
+    this.setupOnboarding();
+    this.setupQuizBackBtn();
     window.addEventListener('shardcards:synced', () => {
       this.renderDecks();
       this.renderTagsFilter();
+    });
+    window.addEventListener('shardcards:quota-exceeded', () => {
+      this.showToast('Espace de stockage plein. Supprimez des decks ou des images.', 'error');
     });
   },
 
   // ---- Mode Sombre ----
   initDarkMode() {
     const saved = localStorage.getItem('flashcards_theme');
-    if (saved) {
-      document.documentElement.setAttribute('data-theme', saved);
-    } else if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    if (saved === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
     }
+    // Default is light (no attribute = clean white/blue theme)
     this._updateThemeColor();
   },
   toggleDarkMode() {
-    const current = document.documentElement.getAttribute('data-theme');
-    const next    = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('flashcards_theme', next);
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('flashcards_theme', 'light');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('flashcards_theme', 'dark');
+    }
     this._updateThemeColor();
     this.hideHamburgerMenu();
   },
   _updateThemeColor() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const meta   = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = isDark ? '#1565C0' : '#2196F3';
+    if (meta) meta.content = isDark ? '#0b1220' : '#f4f8ff';
   },
   isDarkMode() { return document.documentElement.getAttribute('data-theme') === 'dark'; },
 
   // ---- Auth ----
   initAuth() {
     AuthService.init();
-    AuthService.onChange((event, user) => {
+    // Le 1er événement émis par Supabase correspond à la restauration de session
+    // (au chargement de la page) : on ne doit PAS afficher de toast dans ce cas.
+    let isInitialAuthEvent = true;
+    AuthService.onChange((event, user, prevUser) => {
       this._updateAuthUI(user);
-      if (event === 'SIGNED_IN') {
+      const initial = isInitialAuthEvent;
+      isInitialAuthEvent = false;
+      // Toast uniquement sur une vraie connexion (transition déconnecté → connecté),
+      // pas à la restauration de session ni au rafraîchissement de token (prevUser déjà présent).
+      if (event === 'SIGNED_IN' && !prevUser && !initial) {
         this.showToast('Connecté', 'success');
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' && prevUser) {
         this.showToast('Déconnecté', 'info');
         this.renderDecks();
       }
@@ -217,7 +239,7 @@ const App = {
       document.querySelector('#decks-view header .header-actions')?.prepend(indicator);
     }
     if (user) {
-      indicator.innerHTML = Icons.getIcon('cloud', 16, 'rgba(255,255,255,0.9)');
+      indicator.innerHTML = Icons.getIcon('cloud', 18, 'currentColor');
       indicator.title = `Connecté : ${user.email}`;
       indicator.classList.add('connected');
     } else {
@@ -345,14 +367,12 @@ const App = {
   // ---- Icônes statiques ----
 
   initIcons() {
-    document.querySelectorAll('.icon-menu').forEach(el => { el.innerHTML = Icons.getIcon('menu', 20, 'white'); });
-    document.querySelectorAll('.icon-arrow-left').forEach(el => { el.innerHTML = Icons.getIcon('arrowLeft', 20, 'white'); });
-    document.querySelectorAll('.icon-bell').forEach(el => { el.innerHTML = Icons.getIcon('bell', 24, 'white'); });
-    document.querySelectorAll('.icon-close').forEach(el => {
-      el.innerHTML = Icons.getIcon('close', 24, (el.closest('.icon-btn') || el.closest('.hamburger-menu-header')) ? 'white' : 'currentColor');
-    });
-    document.querySelectorAll('.icon-help').forEach(el => { el.innerHTML = Icons.getIcon('help', 24, 'white'); });
-    document.querySelectorAll('.icon-plus').forEach(el => { el.innerHTML = Icons.getIcon('plus', 24, 'white'); });
+    document.querySelectorAll('.icon-menu').forEach(el => { el.innerHTML = Icons.getIcon('menu', 20, 'currentColor'); });
+    document.querySelectorAll('.icon-arrow-left').forEach(el => { el.innerHTML = Icons.getIcon('arrowLeft', 20, 'currentColor'); });
+    document.querySelectorAll('.icon-bell').forEach(el => { el.innerHTML = Icons.getIcon('bell', 24, 'currentColor'); });
+    document.querySelectorAll('.icon-close').forEach(el => { el.innerHTML = Icons.getIcon('close', 24, 'currentColor'); });
+    document.querySelectorAll('.icon-help').forEach(el => { el.innerHTML = Icons.getIcon('help', 24, 'currentColor'); });
+    document.querySelectorAll('.icon-plus').forEach(el => { el.innerHTML = Icons.getIcon('plus', 24, 'currentColor'); });
   },
 
   // ---- Event listeners ----
@@ -398,14 +418,17 @@ const App = {
     const current = document.querySelector('.view.active');
     const next    = document.getElementById(`${viewName}-view`);
     if (!next || current === next) return;
-    if (current) { current.classList.remove('active', 'fade-out', 'fade-in'); current.style.display = 'none'; }
-    next.classList.remove('fade-out', 'fade-in');
-    next.style.display = 'flex'; next.style.opacity = '1'; next.classList.add('active');
+    if (current) {
+      current.classList.remove('active');
+      current.style.display = 'none';
+    }
+    // On laisse l'animation CSS `.view.active { animation: viewEnter }` gérer la transition.
+    // (Les anciens styles inline opacity/transform entraient en conflit avec ce keyframe → flicker.)
+    next.style.display = 'flex';
+    next.classList.remove('active');
+    void next.offsetWidth;          // force un reflow pour rejouer l'animation proprement
+    next.classList.add('active');
     this.currentView = viewName;
-    requestAnimationFrame(() => {
-      next.style.opacity = '0'; next.style.transform = 'translateY(10px)';
-      setTimeout(() => { next.style.transition = 'opacity .3s ease, transform .3s ease'; next.style.opacity = '1'; next.style.transform = 'translateY(0)'; }, 10);
-    });
   },
 
   showDecksView() { this.showView('decks'); this.currentDeckId = null; this.currentIsBaseDeck = false; this.renderDecks(); },
@@ -430,9 +453,8 @@ const App = {
     const menuItems = document.getElementById('hamburger-menu-items');
     if (!menu || !menuItems) return;
 
+    const items  = [];
     const isDark = this.isDarkMode();
-    const items = [];
-
     if (viewType === 'decks') {
       items.push(
         { icon: 'user',     text: AuthService.isLoggedIn() ? `Compte (${AuthService.getUserEmail()})` : 'Connexion / Inscription', action: () => { this.showAuthModal(); this.hideHamburgerMenu(); } },
@@ -443,9 +465,10 @@ const App = {
       );
     } else if (viewType === 'deck-detail') {
       items.push(
-        { icon: 'refresh', text: 'Réviser',             action: () => { this.startReview(this.currentDeckId); this.hideHamburgerMenu(); } },
-        { icon: 'settings',text: 'Paramètres révision', action: () => { this.showReviewSettingsModal(); this.hideHamburgerMenu(); } },
-        { icon: 'chart',   text: 'Statistiques',        action: () => { this.showStatsModal(); this.hideHamburgerMenu(); } },
+        { icon: 'refresh',  text: 'Réviser',             action: () => { this.startReview(this.currentDeckId); this.hideHamburgerMenu(); } },
+        { icon: 'card',     text: 'Examen',               action: () => { this.showQuizSetupModal(); this.hideHamburgerMenu(); } },
+        { icon: 'settings', text: 'Paramètres révision',  action: () => { this.showReviewSettingsModal(); this.hideHamburgerMenu(); } },
+        { icon: 'chart',    text: 'Statistiques du deck', action: () => { this.showStatsModal(); this.hideHamburgerMenu(); } },
         { icon: isDark ? 'sun' : 'moon', text: isDark ? 'Mode clair' : 'Mode sombre', action: () => this.toggleDarkMode() }
       );
       if (!this.currentIsBaseDeck) {
@@ -622,15 +645,27 @@ const App = {
     document.querySelector(`[data-section="${section}"]`)?.classList.add('active');
     document.querySelectorAll('.decks-section-content').forEach(c => c.classList.remove('active'));
     const addDeckBtn = document.getElementById('add-deck-btn');
+    const helpBtn    = document.getElementById('help-btn');
+    const tagsFilter = document.getElementById('tags-filter-container');
 
     if (section === 'my-decks') {
       document.getElementById('my-decks-container')?.classList.add('active');
       this.renderDecks();
+      this.renderTagsFilter();
       if (addDeckBtn) addDeckBtn.style.display = 'flex';
+      if (helpBtn) helpBtn.style.display = 'flex';
     } else if (section === 'base-decks') {
       document.getElementById('base-decks-container')?.classList.add('active');
       this.renderBaseDecks();
+      if (tagsFilter) tagsFilter.style.display = 'none';
       if (addDeckBtn) addDeckBtn.style.display = 'none';
+      if (helpBtn) helpBtn.style.display = 'none';
+    } else if (section === 'stats-section') {
+      document.getElementById('stats-section-container')?.classList.add('active');
+      this.renderStatsDashboard();
+      if (tagsFilter) tagsFilter.style.display = 'none';
+      if (addDeckBtn) addDeckBtn.style.display = 'none';
+      if (helpBtn) helpBtn.style.display = 'none';
     }
   },
 
@@ -843,6 +878,7 @@ const App = {
     const card = this.reviewCards[this.currentReviewIndex];
     if (!card) { this.completeReview(); return; }
 
+    this._flashReviewFeedback(quality);
     SM2.calculateNextReview(card, quality);
     const deck = this.getCurrentDeck();
     if (deck) {
@@ -863,24 +899,41 @@ const App = {
 
     this.currentReviewIndex++;
     document.getElementById('review-buttons')?.classList.add('hidden');
-    const bc = document.getElementById('back-content');
+    const bc    = document.getElementById('back-content');
+    const inner = document.getElementById('flip-card-inner');
     if (bc) bc.style.visibility = 'hidden';
-    document.getElementById('flip-card-inner')?.classList.remove('flipped');
+    // Réinitialise le flip instantanément (sans animation) pour éviter d'afficher
+    // l'ancienne réponse pendant la rotation de retour, puis charge la carte suivante.
+    if (inner) { inner.style.transition = 'none'; inner.classList.remove('flipped'); }
     this.isRevealed = false;
-    setTimeout(() => { this.showReviewCard(); if (bc) bc.style.visibility = ''; }, 350);
+    requestAnimationFrame(() => {
+      this.showReviewCard();
+      if (bc) bc.style.visibility = '';
+      // Restaure la transition de flip pour la prochaine carte
+      if (inner) requestAnimationFrame(() => { inner.style.transition = ''; });
+    });
   },
 
   completeReview() {
     const total      = this.reviewCards.length;
+    const againCount = this.reviewCards.filter(c => (c.cardScore ?? 0) === 0 || c.againCount > 0).length;
+    const score      = Math.round(((total - Math.min(againCount, total)) / total) * 100);
+
+    // Log activity
+    this._logActivity(total);
+
+    if (score >= 80) this._launchConfetti();
+
     const reviewCard = document.getElementById('review-card');
     if (reviewCard) {
-      reviewCard.innerHTML = `<div class="card-side" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;padding:40px;">
-        <div style="margin-bottom:20px">${Icons.getIcon('success', 64, 'var(--success)')}</div>
-        <h2 style="font-size:28px;color:var(--primary-color);margin-bottom:15px;text-align:center">Révision terminée !</h2>
-        <p style="font-size:18px;color:var(--text-primary);margin-bottom:30px;text-align:center">Vous avez révisé <strong>${total}</strong> carte${total !== 1 ? 's' : ''}.</p>
-        <div style="display:flex;gap:15px;width:100%;max-width:400px;justify-content:center">
-          <button id="review-complete-back-btn" class="review-btn good" style="flex:1">Retour au deck</button>
-          <button id="review-complete-again-btn" class="review-btn easy" style="flex:1">Réviser à nouveau</button>
+      reviewCard.innerHTML = `<div class="card-side" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;padding:40px;gap:16px;border-top:4px solid var(--accent)">
+        <div>${Icons.getIcon('success', 56, 'var(--success)')}</div>
+        <h2 style="font-size:26px;font-weight:800;color:var(--text-primary);text-align:center">Révision terminée !</h2>
+        <div style="font-size:48px;font-weight:900;color:var(--accent)">${score}%</div>
+        <p style="font-size:15px;color:var(--text-secondary);text-align:center"><strong style="color:var(--text-primary)">${total}</strong> carte${total !== 1 ? 's' : ''} révisée${total !== 1 ? 's' : ''}</p>
+        <div style="display:flex;gap:10px;width:100%;max-width:380px;justify-content:center;margin-top:8px">
+          <button id="review-complete-back-btn" class="review-btn good" style="flex:1">Retour</button>
+          <button id="review-complete-again-btn" class="review-btn easy" style="flex:1">À nouveau</button>
         </div>
       </div>`;
       document.getElementById('review-complete-back-btn')?.addEventListener('click', () => { this.showDeckDetailView(); this.renderCards(); });
@@ -893,26 +946,35 @@ const App = {
 
   // ---- Modales ----
 
-  showModal(modalId) { document.getElementById(modalId)?.classList.add('active'); },
-
   showModalWithContent(title, content) {
     const overlay = document.getElementById('modal-overlay');
     const modal   = overlay?.querySelector('.modal');
+    if (!overlay) return;
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-content').innerHTML = content;
+    // 1) On positionne l'état "caché" puis on rend visible (display:flex via .hidden retiré)
+    overlay.style.opacity = '0';
+    if (modal) { modal.style.opacity = '0'; modal.style.transform = 'translateY(20px) scale(0.97)'; }
     overlay.classList.remove('hidden');
+    // 2) reflow pour enregistrer l'état de départ, sinon la transition ne se déclenche pas
+    void overlay.offsetWidth;
+    // 3) on bascule vers l'état visible → transition CSS fluide, sans flash
     overlay.style.opacity = '1';
-    if (modal) { modal.style.transform = ''; modal.style.opacity = '1'; }
-    requestAnimationFrame(() => {
-      overlay.style.opacity = '0';
-      if (modal) { modal.style.transform = 'translateY(30px) scale(0.95)'; modal.style.opacity = '0'; }
-      setTimeout(() => { overlay.style.opacity = '1'; if (modal) { modal.style.transform = 'translateY(0) scale(1)'; modal.style.opacity = '1'; } }, 10);
-    });
+    if (modal) { modal.style.opacity = '1'; modal.style.transform = 'translateY(0) scale(1)'; }
   },
 
   hideModal() {
     const overlay = document.getElementById('modal-overlay');
-    if (overlay) { overlay.classList.add('hidden'); const m = overlay.querySelector('.modal'); if (m) { m.style.transform = ''; m.style.opacity = ''; } }
+    if (!overlay) return;
+    const modal = overlay.querySelector('.modal');
+    overlay.style.opacity = '0';
+    if (modal) { modal.style.opacity = '0'; modal.style.transform = 'translateY(20px) scale(0.97)'; }
+    // On masque réellement après la transition pour éviter une disparition brutale
+    setTimeout(() => {
+      overlay.classList.add('hidden');
+      overlay.style.opacity = '';
+      if (modal) { modal.style.transform = ''; modal.style.opacity = ''; }
+    }, 250);
   },
 
   showDeckActionsModal(deckId, isBase = false) {
@@ -1510,8 +1572,11 @@ const App = {
     if (!container) return;
     const tags = this.getAllTags();
     const fc   = document.getElementById('tags-filter-container');
-    if (fc) fc.style.display = tags.length > 0 ? 'block' : 'none';
-    if (tags.length === 0) return;
+    const hasTags = tags.length > 0;
+    if (fc) fc.style.display = hasTags ? 'block' : 'none';
+    // Réserve l'espace sous la barre de tags (fixed) pour ne pas chevaucher la grille
+    document.getElementById('my-decks-container')?.classList.toggle('has-tags-filter', hasTags);
+    if (!hasTags) return;
     container.innerHTML = `
       <button class="tag-filter-btn ${this.currentTagFilter === 'all' ? 'active' : ''}" data-tag="all">Tous</button>
       ${tags.map(t => `<button class="tag-filter-btn ${this.currentTagFilter === t ? 'active' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}`;
@@ -1574,9 +1639,11 @@ const App = {
   showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
     if (!container) return;
+    // Dé-duplication : ne pas empiler un toast identique déjà affiché
+    if ([...container.querySelectorAll('.toast-message')].some(el => el.textContent === message)) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    const icon = { success: Icons.getIcon('success', 20, 'white'), error: Icons.getIcon('close', 20, 'white'), info: Icons.getIcon('help', 20, 'white'), warning: Icons.getIcon('bell', 20, 'white') };
+    const icon = { success: Icons.getIcon('success', 18, 'currentColor'), error: Icons.getIcon('close', 18, 'currentColor'), info: Icons.getIcon('help', 18, 'currentColor'), warning: Icons.getIcon('bell', 18, 'currentColor') };
     toast.innerHTML = `<span class="toast-icon">${icon[type] ?? icon.info}</span><span class="toast-message">${escapeHtml(message)}</span>`;
     container.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('toast-show'));
@@ -1654,9 +1721,12 @@ const App = {
   },
 
   checkFirstVisit() {
+    // Onboarding replaces help modal on first visit
     if (!localStorage.getItem('flashcards_hasVisited')) {
-      localStorage.setItem('flashcards_hasVisited', 'true');
-      setTimeout(() => this.showHelpModal(), 500);
+      setTimeout(() => {
+        const overlay = document.getElementById('onboarding-overlay');
+        if (overlay) overlay.classList.remove('hidden');
+      }, 300);
     }
   },
 
@@ -1703,7 +1773,595 @@ const App = {
     setTimeout(() => btn.classList.remove('clicked'), 200);
   },
 
-  isMobile() { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); }
+  isMobile() { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); },
+
+  // ============================================================
+  // FLASH FEEDBACK (after rating)
+  // ============================================================
+  _flashReviewFeedback(quality) {
+    const cls = quality === 0 ? 'again-flash' : quality === 1 ? 'good-flash' : 'easy-flash';
+    const el  = document.createElement('div');
+    el.className = `review-flash ${cls}`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 250);
+  },
+
+  // ============================================================
+  // CONFETTI (CSS-only particles)
+  // ============================================================
+  _launchConfetti() {
+    const container = document.getElementById('confetti-container');
+    if (!container) return;
+    const colors = ['#2563eb','#3b82f6','#60a5fa','#0ea5e9','#38bdf8','#93c5fd'];
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.cssText = `
+        left:${Math.random()*100}%;
+        background:${colors[Math.floor(Math.random()*colors.length)]};
+        width:${6+Math.random()*8}px;
+        height:${6+Math.random()*8}px;
+        border-radius:${Math.random()>0.5?'50%':'2px'};
+        animation-duration:${2+Math.random()*2}s;
+        animation-delay:${Math.random()*0.8}s;
+        opacity:${0.6+Math.random()*0.4};
+      `;
+      container.appendChild(p);
+    }
+    setTimeout(() => { container.innerHTML = ''; }, 4000);
+  },
+
+  // ============================================================
+  // ACTIVITY LOG (for streak & heatmap)
+  // ============================================================
+  // Clé de date unique (jour calendaire UTC) — partagée par le log d'activité,
+  // la heatmap et le graphique de progression pour rester cohérents.
+  _dateKey(d = new Date()) { return d.toISOString().slice(0, 10); },
+
+  // Retourne les clés des n derniers jours (du plus ancien au plus récent), en UTC.
+  _lastNDayKeys(n) {
+    const keys = [];
+    const cur = new Date();
+    cur.setUTCHours(12, 0, 0, 0);                 // midi UTC : évite les décalages de jour
+    cur.setUTCDate(cur.getUTCDate() - (n - 1));
+    for (let i = 0; i < n; i++) {
+      keys.push(this._dateKey(cur));
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    return keys;
+  },
+
+  _logActivity(cardsReviewed) {
+    const today = this._dateKey();
+    const log   = JSON.parse(localStorage.getItem('flashcards_activity_log') || '{}');
+    log[today]  = (log[today] || 0) + cardsReviewed;
+    localStorage.setItem('flashcards_activity_log', JSON.stringify(log));
+    this._updateStreak(today);
+  },
+
+  _updateStreak(today) {
+    const log    = JSON.parse(localStorage.getItem('flashcards_activity_log') || '{}');
+    const dates  = Object.keys(log).sort().reverse();
+    let streak   = 0;
+    let cursor   = new Date(today);
+    for (let i = 0; i < 366; i++) {
+      const d = cursor.toISOString().slice(0, 10);
+      if (log[d]) { streak++; cursor.setDate(cursor.getDate() - 1); }
+      else break;
+    }
+    localStorage.setItem('flashcards_streak', streak);
+    return streak;
+  },
+
+  _getStreak() { return parseInt(localStorage.getItem('flashcards_streak') || '0'); },
+
+  // ============================================================
+  // ONBOARDING
+  // ============================================================
+  setupOnboarding() {
+    const overlay    = document.getElementById('onboarding-overlay');
+    if (!overlay) return;
+    let currentSlide = 0;
+    const slides     = overlay.querySelectorAll('.onboarding-slide');
+    const dots       = overlay.querySelectorAll('.onboarding-dot');
+    const nextBtn    = document.getElementById('onboarding-next-btn');
+    const skipBtn    = document.getElementById('onboarding-skip-btn');
+
+    const goTo = n => {
+      slides[currentSlide]?.classList.remove('active');
+      dots[currentSlide]?.classList.remove('active');
+      currentSlide = Math.max(0, Math.min(n, slides.length - 1));
+      slides[currentSlide]?.classList.add('active');
+      dots[currentSlide]?.classList.add('active');
+      if (nextBtn) nextBtn.textContent = currentSlide === slides.length - 1 ? '' : 'Suivant →';
+      if (nextBtn) nextBtn.style.display = currentSlide === slides.length - 1 ? 'none' : 'flex';
+    };
+
+    const close = () => {
+      overlay.classList.add('hidden');
+      localStorage.setItem('flashcards_hasVisited', 'true');
+    };
+
+    nextBtn?.addEventListener('click', () => goTo(currentSlide + 1));
+    skipBtn?.addEventListener('click', close);
+    dots.forEach((d, i) => d.addEventListener('click', () => goTo(i)));
+
+    document.getElementById('onboarding-explore-btn')?.addEventListener('click', () => {
+      close();
+      setTimeout(() => this.switchDeckSection('base-decks'), 100);
+    });
+
+    document.getElementById('onboarding-create-btn')?.addEventListener('click', () => {
+      close();
+      setTimeout(() => this.showAddDeckModal(), 200);
+    });
+
+    // Swipe support
+    let touchStartX = 0;
+    overlay.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].clientX; }, { passive: true });
+    overlay.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 50) { if (dx < 0) goTo(currentSlide + 1); else goTo(currentSlide - 1); }
+    });
+  },
+
+  // ============================================================
+  // STATS DASHBOARD (global)
+  // ============================================================
+  // ---- Graphiques (SVG natif, responsive, sans dépendance) ----
+
+  // Donut de répartition par niveau de maîtrise
+  _buildMasteryDonut(buckets) {
+    const segs = [
+      { label: 'Facile',        value: buckets.facile,  color: '#4CAF50' },
+      { label: 'Moyen',         value: buckets.moyen,   color: '#FFC107' },
+      { label: 'Difficile',     value: buckets.dur,     color: '#FF9800' },
+      { label: 'Très difficile',value: buckets.tresDur, color: '#F44336' },
+    ];
+    const total = segs.reduce((s, x) => s + x.value, 0);
+    if (total === 0) return `<div class="chart-empty">Aucune carte à analyser.</div>`;
+
+    let cumulative = 0;
+    const arcs = segs.filter(s => s.value > 0).map(s => {
+      const pct = (s.value / total) * 100;
+      const arc = `<circle class="donut-seg" cx="21" cy="21" r="15.915" fill="none"
+          stroke="${s.color}" stroke-width="5"
+          stroke-dasharray="${pct.toFixed(2)} ${(100 - pct).toFixed(2)}"
+          stroke-dashoffset="${(100 - cumulative + 25).toFixed(2)}"></circle>`;
+      cumulative += pct;
+      return arc;
+    }).join('');
+
+    const masteredPct = Math.round((buckets.facile / total) * 100);
+    const legend = segs.map(s => `<div class="donut-legend-item">
+        <span class="donut-legend-dot" style="background:${s.color}"></span>
+        <span class="donut-legend-label">${s.label}</span>
+        <span class="donut-legend-val">${s.value}</span>
+      </div>`).join('');
+
+    return `<div class="donut-chart-wrap">
+      <svg class="donut-chart" viewBox="0 0 42 42" role="img" aria-label="Répartition par maîtrise">
+        <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--border-light)" stroke-width="5"></circle>
+        ${arcs}
+        <text x="21" y="20.5" class="donut-center-num">${masteredPct}%</text>
+        <text x="21" y="25.5" class="donut-center-label">maîtrisé</text>
+      </svg>
+      <div class="donut-legend">${legend}</div>
+    </div>`;
+  },
+
+  // Courbe de progression : cartes révisées sur les 14 derniers jours
+  _buildProgressionChart(actLog) {
+    const keys = this._lastNDayKeys(14);
+    const data = keys.map(k => actLog[k] || 0);
+    const max  = Math.max(1, ...data);
+    const W = 300, H = 110, padX = 8, padTop = 10, padBot = 22;
+    const innerW = W - padX * 2, innerH = H - padTop - padBot, n = data.length;
+    const x = i => padX + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+    const y = v => padTop + innerH - (v / max) * innerH;
+    const pts = data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+    const linePath = 'M' + pts.join(' L');
+    const baseY = (padTop + innerH).toFixed(1);
+    const areaPath = `M${x(0).toFixed(1)},${baseY} L${pts.join(' L')} L${x(n - 1).toFixed(1)},${baseY} Z`;
+    const dots = data.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="1.8" class="line-dot"></circle>`).join('');
+    const labels = data.map((v, i) => {
+      if (i % 3 !== 0 && i !== n - 1) return '';
+      return `<text x="${x(i).toFixed(1)}" y="${H - 6}" class="chart-x-label">${keys[i].slice(8, 10)}</text>`;
+    }).join('');
+    const totalReviewed = data.reduce((s, v) => s + v, 0);
+
+    return `<div class="line-chart-wrap">
+      <svg class="line-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cartes révisées sur 14 jours">
+        <path d="${areaPath}" class="line-area"></path>
+        <path d="${linePath}" class="line-stroke"></path>
+        ${dots}${labels}
+      </svg>
+    </div>
+    <div class="chart-caption">${totalReviewed} carte${totalReviewed !== 1 ? 's' : ''} révisée${totalReviewed !== 1 ? 's' : ''} sur 14 jours</div>`;
+  },
+
+  renderStatsDashboard() {
+    const container = document.getElementById('stats-dashboard-content');
+    if (!container) return;
+
+    // Important : les statistiques de révision ne portent QUE sur les decks de
+    // l'utilisateur. Les decks de base (système) sont exclus de ces calculs.
+    const userDecks = StorageManager.getDecks();
+    const streak    = this._getStreak();
+    const actLog    = JSON.parse(localStorage.getItem('flashcards_activity_log') || '{}');
+    const sessions  = JSON.parse(localStorage.getItem('flashcards_sessions') || '[]');
+    const now       = Date.now();
+    const today     = new Date(); today.setHours(0,0,0,0);
+
+    let totalCards = 0, masteredCards = 0, dueCards = 0, todayCards = 0;
+    const buckets = { tresDur: 0, dur: 0, moyen: 0, facile: 0 };
+    userDecks.forEach(deck => {
+      if (!Array.isArray(deck.cards)) return;
+      deck.cards.forEach(c => {
+        totalCards++;
+        const s = c.cardScore ?? 0;
+        if (s >= 30) { masteredCards++; buckets.facile++; }
+        else if (s >= 20) buckets.moyen++;
+        else if (s >= 10) buckets.dur++;
+        else buckets.tresDur++;
+        if (!c.nextReview || c.nextReview <= now) dueCards++;
+        if (c.lastReview && c.lastReview >= today.getTime()) todayCards++;
+      });
+    });
+
+    // Heatmap : 12 semaines, alignées au dimanche, incluant la semaine en cours.
+    const heatmapCells = [];
+    const heatAnchor = new Date();
+    heatAnchor.setUTCHours(12, 0, 0, 0);
+    heatAnchor.setUTCDate(heatAnchor.getUTCDate() - heatAnchor.getUTCDay()); // dimanche de cette semaine
+    heatAnchor.setUTCDate(heatAnchor.getUTCDate() - 7 * 11);                 // 11 semaines avant → 12 au total
+    for (let week = 0; week < 12; week++) {
+      const weekCells = [];
+      for (let day = 0; day < 7; day++) {
+        const d = new Date(heatAnchor); d.setUTCDate(d.getUTCDate() + week * 7 + day);
+        const key   = this._dateKey(d);
+        const count = actLog[key] || 0;
+        const level = count === 0 ? 0 : count < 5 ? 1 : count < 15 ? 2 : count < 30 ? 3 : 4;
+        weekCells.push(`<div class="heatmap-cell" data-level="${level}" title="${key} : ${count} carte${count !== 1 ? 's' : ''}"></div>`);
+      }
+      heatmapCells.push(`<div class="heatmap-week">${weekCells.join('')}</div>`);
+    }
+
+    // Graphiques
+    const progressionChart = this._buildProgressionChart(actLog);
+    const masteryDonut      = this._buildMasteryDonut(buckets);
+
+    // Per-deck mastery bars
+    const deckBars = userDecks.map(deck => {
+      if (!Array.isArray(deck.cards) || deck.cards.length === 0) return '';
+      const easy = deck.cards.filter(c => (c.cardScore ?? 0) >= 30).length;
+      const pct  = Math.round((easy / deck.cards.length) * 100);
+      return `<div class="deck-mastery-bar">
+        <div class="deck-mastery-name" title="${escapeHtml(deck.name)}">${escapeHtml(deck.name)}</div>
+        <div class="deck-mastery-track"><div class="deck-mastery-fill animate-bar" style="--target-width:${pct}%"></div></div>
+        <div class="deck-mastery-pct">${pct}%</div>
+      </div>`;
+    }).join('');
+
+    // Recent sessions
+    const recentSessions = sessions.slice(-5).reverse().map(s => {
+      const d = new Date(s.date);
+      const label = d.toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
+      return `<div class="session-item">
+        <span class="session-deck">${escapeHtml(s.deckName)}</span>
+        <span class="session-score">${s.score}%</span>
+        <span class="session-date">${label}</span>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <!-- Streak -->
+      <div class="streak-card">
+        <div class="streak-icon">${Icons.getIcon('flame', 30, 'currentColor')}</div>
+        <div class="streak-info">
+          <div class="streak-number">${streak}</div>
+          <div class="streak-label">jour${streak !== 1 ? 's' : ''} consécutif${streak !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+
+      <!-- Overview -->
+      <div class="stats-overview">
+        <div class="stats-overview-card">
+          <div class="stats-overview-label">Total cartes</div>
+          <div class="stats-overview-value">${totalCards}</div>
+        </div>
+        <div class="stats-overview-card">
+          <div class="stats-overview-label">Maîtrisées</div>
+          <div class="stats-overview-value" style="color:var(--success)">${masteredCards}</div>
+          <div class="stats-overview-sub">${totalCards ? Math.round(masteredCards/totalCards*100) : 0}%</div>
+        </div>
+        <div class="stats-overview-card">
+          <div class="stats-overview-label">À réviser</div>
+          <div class="stats-overview-value" style="color:var(--warning)">${dueCards}</div>
+        </div>
+        <div class="stats-overview-card">
+          <div class="stats-overview-label">Aujourd'hui</div>
+          <div class="stats-overview-value" style="color:var(--accent-light)">${todayCards}</div>
+        </div>
+      </div>
+
+      <!-- Progression -->
+      <div class="stats-chart-section">
+        <h3>Progression — 14 jours</h3>
+        ${progressionChart}
+      </div>
+
+      <!-- Répartition par maîtrise -->
+      <div class="stats-chart-section">
+        <h3>Répartition par maîtrise</h3>
+        ${masteryDonut}
+      </div>
+
+      <!-- Heatmap -->
+      <div class="activity-section">
+        <h3>Activité — 12 semaines</h3>
+        <div class="heatmap-grid">${heatmapCells.join('')}</div>
+      </div>
+
+      ${deckBars ? `
+      <!-- Per-deck bars -->
+      <div class="stats-decks-section">
+        <h3>Maîtrise par deck</h3>
+        ${deckBars}
+      </div>` : ''}
+
+      ${recentSessions ? `
+      <!-- Recent sessions -->
+      <div class="recent-sessions">
+        <h3>Sessions récentes</h3>
+        ${recentSessions}
+      </div>` : ''}
+    `;
+
+    // Animate bars
+    setTimeout(() => {
+      container.querySelectorAll('.deck-mastery-fill.animate-bar').forEach(el => {
+        el.style.width = el.style.getPropertyValue('--target-width');
+      });
+    }, 100);
+  },
+
+  // ============================================================
+  // QUIZ SETUP BACK BTN
+  // ============================================================
+  setupQuizBackBtn() {
+    document.getElementById('quiz-back-btn')?.addEventListener('click', () => {
+      this.currentDeckId ? this.showDeckDetailView() : this.showDecksView();
+    });
+  },
+
+  // ============================================================
+  // QUIZ / EXAM MODE
+  // ============================================================
+  showQuizSetupModal() {
+    if (!this.currentDeckId) return;
+    const deck = this.getCurrentDeck();
+    if (!deck || deck.cards.length < 4) {
+      this.showToast('Il faut au moins 4 cartes pour le mode examen.', 'error'); return;
+    }
+    const content = `<form id="quiz-setup-form">
+      <div class="form-group">
+        <label for="quiz-count">Nombre de questions</label>
+        <div class="custom-select-wrapper">
+          <select id="quiz-count" class="custom-select">
+            <option value="10">10 questions</option>
+            <option value="20">20 questions</option>
+            <option value="all">Toutes (${deck.cards.length})</option>
+          </select>
+          <div class="custom-select-arrow">${Icons.getIcon('arrowDown', 12)}</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="quiz-type">Type de questions</label>
+        <div class="custom-select-wrapper">
+          <select id="quiz-type" class="custom-select">
+            <option value="mcq">QCM (4 choix)</option>
+            <option value="truefalse">Vrai / Faux</option>
+          </select>
+          <div class="custom-select-arrow">${Icons.getIcon('arrowDown', 12)}</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="quiz-timer">Temps par question</label>
+        <div class="custom-select-wrapper">
+          <select id="quiz-timer" class="custom-select">
+            <option value="0">Illimité</option>
+            <option value="15">15 secondes</option>
+            <option value="30">30 secondes</option>
+          </select>
+          <div class="custom-select-arrow">${Icons.getIcon('arrowDown', 12)}</div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="quiz-setup-cancel">Annuler</button>
+        <button type="submit" class="btn btn-primary">Commencer l'examen</button>
+      </div>
+    </form>`;
+    this.showModalWithContent('Mode Examen', content);
+    requestAnimationFrame(() => {
+      document.getElementById('quiz-setup-cancel')?.addEventListener('click', () => this.hideModal());
+      document.getElementById('quiz-setup-form')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const countVal = document.getElementById('quiz-count').value;
+        const count    = countVal === 'all' ? deck.cards.length : Math.min(parseInt(countVal), deck.cards.length);
+        const type     = document.getElementById('quiz-type').value;
+        const timer    = parseInt(document.getElementById('quiz-timer').value);
+        this.hideModal();
+        this.startQuiz({ deck, count, type, timer });
+      });
+    });
+  },
+
+  startQuiz({ deck, count, type, timer }) {
+    const shuffled = [...deck.cards].sort(() => Math.random() - 0.5).slice(0, count);
+    this.quizState = {
+      questions: shuffled,
+      type,
+      timer,
+      currentIndex: 0,
+      score: 0,
+      wrong: [],
+      timerInterval: null
+    };
+    this.showView('quiz');
+    this._renderQuizQuestion();
+  },
+
+  _renderQuizQuestion() {
+    const { questions, type, timer, currentIndex, score } = this.quizState;
+    if (currentIndex >= questions.length) { this._showQuizResults(); return; }
+
+    const q   = questions[currentIndex];
+    const pct = Math.round(((currentIndex) / questions.length) * 100);
+
+    document.getElementById('quiz-progress-fill').style.width = pct + '%';
+    document.getElementById('quiz-score-chip').textContent = `${score} / ${currentIndex}`;
+
+    // Timer bar
+    const timerBar = document.getElementById('quiz-timer-bar');
+    if (timerBar) timerBar.style.display = timer > 0 ? 'block' : 'none';
+
+    const content = document.getElementById('quiz-content');
+    if (!content) return;
+
+    if (type === 'mcq') {
+      // Build distractors from other cards
+      const others   = questions.filter((_, i) => i !== currentIndex).sort(() => Math.random() - 0.5);
+      const wrong3   = others.slice(0, 3).map(c => c.back);
+      const choices  = [...wrong3, q.back].sort(() => Math.random() - 0.5);
+
+      content.innerHTML = `
+        <div class="quiz-question-area">
+          <div class="quiz-question-number">Question ${currentIndex + 1} / ${questions.length}</div>
+          <div class="quiz-question-text">${escapeHtml(q.front)}</div>
+        </div>
+        <div class="quiz-choices-grid">
+          ${choices.map((c, i) => `
+            <button class="quiz-choice" data-answer="${escapeHtml(c)}" data-correct="${c === q.back}">
+              ${escapeHtml(c)}
+            </button>`).join('')}
+        </div>`;
+
+      content.querySelectorAll('.quiz-choice').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const isCorrect = btn.dataset.correct === 'true';
+          content.querySelectorAll('.quiz-choice').forEach(b => {
+            b.disabled = true;
+            if (b.dataset.correct === 'true') b.classList.add('reveal-correct');
+          });
+          btn.classList.add(isCorrect ? 'selected-correct' : 'selected-wrong');
+          if (isCorrect) this.quizState.score++;
+          else this.quizState.wrong.push({ q: q.front, a: q.back });
+          clearInterval(this.quizState.timerInterval);
+          setTimeout(() => { this.quizState.currentIndex++; this._renderQuizQuestion(); }, 1000);
+        });
+      });
+    } else {
+      // True / False
+      const isTrue = Math.random() > 0.5;
+      const displayed = isTrue ? q.back : questions[(currentIndex + 1) % questions.length]?.back ?? q.back;
+      const correct   = isTrue;
+
+      content.innerHTML = `
+        <div class="quiz-question-area">
+          <div class="quiz-question-number">Question ${currentIndex + 1} / ${questions.length}</div>
+          <div class="quiz-question-text">${escapeHtml(q.front)}</div>
+          <p style="margin-top:16px;font-size:16px;color:var(--text-secondary);font-style:italic">"${escapeHtml(displayed)}"</p>
+        </div>
+        <div class="quiz-choices-grid" style="grid-template-columns:1fr 1fr">
+          <button class="quiz-choice" data-answer="true">${Icons.getIcon('check', 18, 'currentColor')} VRAI</button>
+          <button class="quiz-choice" data-answer="false">${Icons.getIcon('close', 18, 'currentColor')} FAUX</button>
+        </div>`;
+
+      content.querySelectorAll('.quiz-choice').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chosen    = btn.dataset.answer === 'true';
+          const isCorrect = chosen === correct;
+          content.querySelectorAll('.quiz-choice').forEach(b => {
+            b.disabled = true;
+            if ((b.dataset.answer === 'true') === correct) b.classList.add('reveal-correct');
+          });
+          btn.classList.add(isCorrect ? 'selected-correct' : 'selected-wrong');
+          if (isCorrect) this.quizState.score++;
+          else this.quizState.wrong.push({ q: q.front, a: q.back });
+          clearInterval(this.quizState.timerInterval);
+          setTimeout(() => { this.quizState.currentIndex++; this._renderQuizQuestion(); }, 1000);
+        });
+      });
+    }
+
+    // Timer
+    if (timer > 0) {
+      let remaining = timer;
+      const fill = timerBar;
+      if (fill) fill.style.transform = 'scaleX(1)';
+      clearInterval(this.quizState.timerInterval);
+      this.quizState.timerInterval = setInterval(() => {
+        remaining--;
+        if (fill) fill.style.transform = `scaleX(${remaining / timer})`;
+        if (remaining <= 0) {
+          clearInterval(this.quizState.timerInterval);
+          this.quizState.wrong.push({ q: q.front, a: q.back });
+          this.quizState.currentIndex++;
+          this._renderQuizQuestion();
+        }
+      }, 1000);
+    }
+  },
+
+  _showQuizResults() {
+    clearInterval(this.quizState?.timerInterval);
+    const { score, questions, wrong } = this.quizState;
+    const total = questions.length;
+    const pct   = Math.round((score / total) * 100);
+    const grade = pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
+
+    // Save session
+    const sessions = JSON.parse(localStorage.getItem('flashcards_sessions') || '[]');
+    const deck     = this.getCurrentDeck();
+    sessions.push({ date: Date.now(), deckName: deck?.name ?? 'Deck', score: pct });
+    if (sessions.length > 20) sessions.splice(0, sessions.length - 20);
+    localStorage.setItem('flashcards_sessions', JSON.stringify(sessions));
+
+    // Un examen est aussi une révision : on l'enregistre dans le log d'activité
+    // (alimente la heatmap "Activité", le streak et le graphique de progression).
+    this._logActivity(total);
+
+    if (pct >= 80) this._launchConfetti();
+
+    const wrongHtml = wrong.slice(0, 5).map(w => `
+      <div class="quiz-wrong-item">
+        <div class="quiz-wrong-q">${escapeHtml(w.q)}</div>
+        <div class="quiz-wrong-a">${escapeHtml(w.a)}</div>
+      </div>`).join('');
+
+    document.getElementById('quiz-content').innerHTML = `
+      <div class="quiz-results">
+        <div class="quiz-grade">${grade}</div>
+        <div class="quiz-score-display">${score} / ${total} correct${score !== 1 ? 's' : ''}</div>
+        <div class="quiz-score-sub">${pct}% de réussite</div>
+        ${wrong.length ? `<div class="quiz-wrong-list"><h4 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">À revoir</h4>${wrongHtml}</div>` : `<p class="quiz-perfect">${Icons.getIcon('award', 20, 'currentColor')} Parfait, sans faute !</p>`}
+        <div style="display:flex;gap:10px;width:100%">
+          <button class="btn btn-secondary" id="quiz-result-back" style="flex:1">Retour au deck</button>
+          ${wrong.length ? `<button class="btn btn-primary" id="quiz-result-retry" style="flex:1">Revoir les erreurs</button>` : ''}
+        </div>
+      </div>`;
+
+    document.getElementById('quiz-result-back')?.addEventListener('click', () => this.showDeckDetailView());
+    document.getElementById('quiz-result-retry')?.addEventListener('click', () => {
+      const deck = this.getCurrentDeck();
+      if (!deck) return;
+      const wrongCards = deck.cards.filter(c => wrong.some(w => w.q === c.front));
+      if (wrongCards.length >= 2) {
+        this.startQuiz({ deck: { ...deck, cards: wrongCards }, count: wrongCards.length, type: this.quizState.type, timer: this.quizState.timer });
+      }
+    });
+  }
 };
 
 // ============================================================

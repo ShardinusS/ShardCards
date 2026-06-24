@@ -1,9 +1,13 @@
 // ============================================================
 // supabase-client.js – Utilise la version UMD chargée globalement
 // ============================================================
+// Les clés sont lues depuis window.__CONFIG__ (config.js, non versionné).
+// Politiques RLS requises : voir config.js.
 
-const SUPABASE_URL = 'https://kwvdseqaljdwqbrjtarh.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_y2EXyAtUtiHgN5RDpofCpA_j_nCHiS1';
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.__CONFIG__ ?? {};
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('[supabase-client] window.__CONFIG__ manquant — vérifiez que config.js est chargé avant ce module.');
+}
 
 // La variable globale supabase est fournie par supabase-umd.js
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

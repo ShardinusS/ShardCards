@@ -62,6 +62,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
+  // Stale-while-revalidate pour script.js et style.css : servir le cache
+  // immédiatement et refetcher en arrière-plan pour la prochaine visite.
+  const isAppAsset = url.pathname.endsWith('/script.js') || url.pathname.endsWith('/style.css');
+  if (isAppAsset) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request);
+        const fetchPromise = fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => null);
+        return cached ?? fetchPromise;
+      })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request)
       .then((response) => {
@@ -125,7 +144,6 @@ async function checkScheduledNotifications() {
       if (dueScheduledNotifications.length > 0) {
         for (const scheduledNotif of dueScheduledNotifications) {
           try {
-            const deckName = scheduledNotif.data?.deckName || scheduledNotif.body?.replace('Il est temps de réviser : ', '') || 'Vos flashcards';
             const deckId = scheduledNotif.data?.deckId || null;
             await self.registration.scheduledNotifications.delete(scheduledNotif.id);
             if (scheduledNotif.data?.reminderId && db) {
@@ -136,7 +154,13 @@ async function checkScheduledNotifications() {
                 req.onsuccess = () => resolve(req.result);
                 req.onerror = () => reject(req.error);
               });
-              if (notification) await scheduleNextNotification(notification);
+              if (notification) {
+                // Marquer comme récente AVANT scheduleNext pour éviter le double-affichage
+                // par le chemin IndexedDB qui s'exécute juste après.
+                const dedupeKey = `${notification.deckId}_${notification.nextNotification}`;
+                recentNotifications.set(dedupeKey, now);
+                await scheduleNextNotification(notification);
+              }
             }
           } catch (error) {
             console.error('Erreur traitement notif programmée:', error);
@@ -400,8 +424,6 @@ function startPeriodicCheck() {
   scheduleNextWakeUp();
   if ('sync' in self.registration) {
     self.registration.sync.register('check-notifications').catch(() => {});
-    self.registration.sync.register('check-notifications-backup-1').catch(() => {});
-    self.registration.sync.register('check-notifications-backup-2').catch(() => {});
   }
   if ('periodicSync' in self.registration) {
     self.registration.periodicSync.register('check-notifications-periodic', { minInterval: 60 * 60 * 1000 }).catch(() => {});

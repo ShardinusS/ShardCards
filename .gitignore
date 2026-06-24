@@ -33,6 +33,7 @@ supabase-client.js
 supabase-umd.js
 supabase*.local.js
 *supabase*key*
+config.js
 
 # Node modules (si vous ajoutez des dépendances plus tard)
 node_modules/

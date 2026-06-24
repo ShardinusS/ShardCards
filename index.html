@@ -6,29 +6,105 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ShardCards">
-    <meta name="theme-color" content="#2196F3">
+    <meta name="theme-color" content="#f4f8ff">
+    <meta name="color-scheme" content="light dark">
     <meta name="mobile-web-app-capable" content="yes">
     <title>ShardCards</title>
     <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="apple-touch-icon" href="icon-1024.png">
     <link rel="apple-touch-icon" sizes="1024x1024" href="icon-1024.png">
-    <link rel="apple-touch-icon-precomposed" sizes="1024x1024" href="icon-1024.png">
     <link rel="icon" type="image/png" sizes="1024x1024" href="icon-1024.png">
 </head>
 <body>
-    <!-- Toast de notification simple -->
-    <div id="notification-toast" class="notification-toast hidden">
-        <div class="notification-toast-content">
-            <div class="notification-toast-message" id="notification-toast-message">Il est temps de réviser</div>
-            <button id="notification-toast-ok" class="notification-toast-btn">OK</button>
+
+    <!-- ========== ONBOARDING OVERLAY ========== -->
+    <div id="onboarding-overlay" class="hidden">
+        <button class="onboarding-skip" id="onboarding-skip-btn">Passer</button>
+
+        <div class="onboarding-slides">
+            <!-- Slide 1 -->
+            <div class="onboarding-slide active" data-slide="0">
+                <div class="onboarding-illustration">
+                    <div class="onboarding-flip-demo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    </div>
+                </div>
+                <h1 class="onboarding-title">Mémorise mieux,<br>révise moins.</h1>
+                <p class="onboarding-subtitle">ShardCards utilise la répétition espacée pour graver les connaissances dans ta mémoire durablement.</p>
+            </div>
+
+            <!-- Slide 2 -->
+            <div class="onboarding-slide" data-slide="1">
+                <h2 class="onboarding-title" style="font-size:22px">Comment ça marche ?</h2>
+                <div class="onboarding-steps">
+                    <div class="onboarding-step">
+                        <div class="onboarding-step-icon tint-blue">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        </div>
+                        <div class="onboarding-step-text">
+                            <strong>Crée tes cartes</strong>
+                            <span>Ajoute des decks avec questions & réponses</span>
+                        </div>
+                    </div>
+                    <div class="onboarding-step">
+                        <div class="onboarding-step-icon tint-sky">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        </div>
+                        <div class="onboarding-step-text">
+                            <strong>Révise chaque jour</strong>
+                            <span>Retourne les cartes et évalue ta réponse</span>
+                        </div>
+                    </div>
+                    <div class="onboarding-step">
+                        <div class="onboarding-step-icon tint-green">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        </div>
+                        <div class="onboarding-step-text">
+                            <strong>L'algorithme s'adapte</strong>
+                            <span>Les cartes difficiles reviennent plus souvent</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 3 -->
+            <div class="onboarding-slide" data-slide="2">
+                <div class="onboarding-illustration">
+                    <div class="onboarding-flip-demo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+                    </div>
+                </div>
+                <h2 class="onboarding-title" style="font-size:22px">Par où commencer ?</h2>
+                <div class="onboarding-cta-group">
+                    <button class="onboarding-cta-primary" id="onboarding-explore-btn">
+                        Explorer les decks de maths
+                    </button>
+                    <button class="onboarding-cta-secondary" id="onboarding-create-btn">
+                        Créer mon propre deck
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="onboarding-nav">
+            <div class="onboarding-dots">
+                <div class="onboarding-dot active" data-slide="0"></div>
+                <div class="onboarding-dot" data-slide="1"></div>
+                <div class="onboarding-dot" data-slide="2"></div>
+            </div>
+            <button class="onboarding-next" id="onboarding-next-btn">
+                Suivant →
+            </button>
         </div>
     </div>
-    
-    <!-- Toast container pour feedback visuel -->
+
     <div id="toast-container" class="toast-container"></div>
-    
-    <!-- Modal de confirmation -->
+
+    <!-- ========== CONFIRM MODAL ========== -->
     <div id="confirm-modal" class="confirm-modal-overlay hidden">
         <div class="confirm-modal">
             <div class="confirm-modal-icon" id="confirm-modal-icon"></div>
@@ -40,8 +116,8 @@
             </div>
         </div>
     </div>
-    
-    <!-- Écran principal - Liste des decks -->
+
+    <!-- ========== VUE : LISTE DES DECKS ========== -->
     <div id="decks-view" class="view active">
         <header>
             <img src="icon-1024.png" alt="ShardCards" class="header-logo">
@@ -52,32 +128,36 @@
                 </button>
             </div>
         </header>
-        
-        <!-- Sections de navigation -->
+
+        <!-- Tabs navigation -->
         <div class="deck-sections">
-            <button class="deck-section-btn active" data-section="my-decks">
-                <span>Mes Decks</span>
-            </button>
-            <button class="deck-section-btn" data-section="base-decks">
-                <span>Decks de Base</span>
-            </button>
+            <button class="deck-section-btn active" data-section="my-decks">Mes Decks</button>
+            <button class="deck-section-btn" data-section="base-decks">Decks de Base</button>
+            <button class="deck-section-btn" data-section="stats-section">Statistiques</button>
         </div>
-        
-        
-        <!-- Conteneur pour Mes Decks -->
+
+        <!-- Tags filter -->
+        <div id="tags-filter-container" class="tags-filter-container" style="display:none">
+            <div class="tags-filter-scroll" id="tags-filter-scroll"></div>
+        </div>
+
+        <!-- Mes Decks -->
         <div id="my-decks-container" class="decks-section-content active">
-        <div id="decks-container" class="decks-grid">
-            <!-- Les decks seront ajoutés dynamiquement ici -->
-            </div>
+            <div id="decks-container" class="decks-grid"></div>
         </div>
-        
-        <!-- Conteneur pour Decks de Base -->
+
+        <!-- Decks de Base -->
         <div id="base-decks-container" class="decks-section-content">
-            <div id="base-decks-grid" class="decks-grid">
-                <!-- Les decks de base seront ajoutés dynamiquement ici -->
+            <div id="base-decks-grid" class="decks-grid"></div>
+        </div>
+
+        <!-- Dashboard Statistiques global -->
+        <div id="stats-section-container" class="decks-section-content">
+            <div class="stats-dashboard" id="stats-dashboard-content">
+                <!-- Populated dynamically -->
             </div>
         </div>
-        
+
         <div class="fab-container">
             <button id="help-btn" class="fab help-fab" aria-label="Aide" title="Aide">
                 <span class="icon-svg icon-help"></span>
@@ -88,7 +168,7 @@
         </div>
     </div>
 
-    <!-- Écran détail d'un deck -->
+    <!-- ========== VUE : DÉTAIL DECK ========== -->
     <div id="deck-detail-view" class="view">
         <header>
             <button id="back-btn" class="icon-btn" aria-label="Retour">
@@ -101,8 +181,8 @@
                 </button>
             </div>
         </header>
-        
-        <!-- Barre de recherche et tri -->
+
+        <!-- Search & sort toolbar -->
         <div class="cards-toolbar">
             <div class="search-container">
                 <span class="search-icon icon-svg"></span>
@@ -111,20 +191,18 @@
             </div>
             <div class="sort-container">
                 <select id="cards-sort" aria-label="Trier par">
-                    <option value="default">Tri par défaut</option>
+                    <option value="default">Défaut</option>
                     <option value="score-asc">Difficulté ↑</option>
                     <option value="score-desc">Difficulté ↓</option>
                     <option value="alpha-asc">A → Z</option>
                     <option value="alpha-desc">Z → A</option>
-                    <option value="review">Prochaine révision</option>
+                    <option value="review">Révision</option>
                 </select>
             </div>
         </div>
-        
-        <div id="cards-container" class="cards-list">
-            <!-- Les cartes seront ajoutées dynamiquement ici -->
-        </div>
-        
+
+        <div id="cards-container" class="cards-list"></div>
+
         <div class="fab-container">
             <button id="add-card-btn" class="fab" aria-label="Ajouter une carte">
                 <span class="icon-svg icon-plus"></span>
@@ -132,7 +210,7 @@
         </div>
     </div>
 
-    <!-- Écran révision -->
+    <!-- ========== VUE : RÉVISION ========== -->
     <div id="review-view" class="view">
         <header>
             <button id="review-back-btn" class="icon-btn" aria-label="Retour">
@@ -141,7 +219,7 @@
             <h1>Révision</h1>
             <div id="review-progress">0 / 0</div>
         </header>
-        
+
         <div id="review-card" class="review-card">
             <div class="flip-card-inner" id="flip-card-inner">
                 <div id="card-front" class="card-side card-front">
@@ -156,7 +234,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div id="review-buttons" class="review-buttons hidden">
             <button id="again-btn" class="review-btn again">Encore</button>
             <button id="good-btn" class="review-btn good">Bien</button>
@@ -164,7 +242,34 @@
         </div>
     </div>
 
-    <!-- Modals -->
+    <!-- ========== VUE : QUIZ / EXAMEN ========== -->
+    <div id="quiz-view" class="view">
+        <header>
+            <button id="quiz-back-btn" class="icon-btn" aria-label="Retour">
+                <span class="icon-svg icon-arrow-left"></span>
+            </button>
+            <h1>Examen</h1>
+            <div class="header-actions"></div>
+        </header>
+
+        <!-- Quiz header bar -->
+        <div class="quiz-header" id="quiz-header-bar">
+            <div class="quiz-progress-bar">
+                <div class="quiz-progress-fill" id="quiz-progress-fill"></div>
+            </div>
+            <div class="quiz-score-chip" id="quiz-score-chip">0 / 0</div>
+        </div>
+
+        <!-- Timer bar (optional) -->
+        <div class="quiz-timer-bar" id="quiz-timer-bar" style="display:none"></div>
+
+        <!-- Question area -->
+        <div id="quiz-content" style="flex:1; overflow-y:auto; padding-bottom: max(30px, var(--safe-bottom));">
+            <!-- Populated dynamically -->
+        </div>
+    </div>
+
+    <!-- ========== MODAL GÉNÉRIQUE ========== -->
     <div id="modal-overlay" class="modal-overlay hidden">
         <div class="modal">
             <div class="modal-header">
@@ -177,29 +282,33 @@
         </div>
     </div>
 
-    <!-- Input file caché pour import -->
+    <!-- Import file (hidden) -->
     <input type="file" id="import-file-input" accept=".json" style="display: none;">
 
-    <!-- Menu hamburger -->
+    <!-- ========== MENU HAMBURGER ========== -->
     <div id="hamburger-menu" class="hamburger-menu hidden">
         <div class="hamburger-menu-overlay"></div>
         <div class="hamburger-menu-content">
             <div class="hamburger-menu-header">
                 <h2>Menu</h2>
-                <button id="hamburger-close-btn" class="icon-btn" aria-label="Fermer"><span class="icon-svg icon-close"></span></button>
+                <button id="hamburger-close-btn" class="icon-btn" aria-label="Fermer">
+                    <span class="icon-svg icon-close"></span>
+                </button>
             </div>
-            <div class="hamburger-menu-items" id="hamburger-menu-items">
-                <!-- Les éléments du menu seront ajoutés dynamiquement -->
-            </div>
+            <div class="hamburger-menu-items" id="hamburger-menu-items"></div>
             <div class="hamburger-menu-footer">
-                <div class="copyright">© 2026 Kenzo Metgy - Tous droits réservés</div>
+                <div class="copyright">© 2026 Kenzo Metgy — Tous droits réservés</div>
             </div>
         </div>
     </div>
 
-    <!-- 1. Charge Supabase UMD (fournit window.supabase) -->
+    <!-- Confetti container -->
+    <div class="confetti-container" id="confetti-container"></div>
+
+    <script src="config.js"></script>
+    <!-- supabase-umd.js : bundle local (voir en-tête du fichier pour la version).
+         Si vous passez à une URL CDN, ajoutez integrity="sha384-<hash>" crossorigin="anonymous". -->
     <script src="supabase-umd.js"></script>
-    <!-- 2. Lance l'application principale en module -->
     <script type="module" src="script.js"></script>
 </body>
 </html>

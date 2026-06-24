@@ -28,7 +28,7 @@ const LocalStorage = {
       localStorage.setItem(this._KEY, JSON.stringify(decks));
     } catch (e) {
       if (e.name === 'QuotaExceededError') {
-        alert('Espace de stockage plein. Supprimez des decks ou des images.');
+        window.dispatchEvent(new CustomEvent('shardcards:quota-exceeded'));
       }
       throw e;
     }
