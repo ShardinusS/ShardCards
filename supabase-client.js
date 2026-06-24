@@ -1,13 +1,15 @@
 // ============================================================
 // supabase-client.js – Utilise la version UMD chargée globalement
 // ============================================================
-// Les clés sont lues depuis window.__CONFIG__ (config.js, non versionné).
-// Politiques RLS requises : voir config.js.
+// La clé ci-dessous est une clé PUBLISHABLE (préfixe sb_publishable_).
+// Sur un site statique public, elle est nécessairement exposée au client :
+// la sécurité repose sur les politiques RLS Supabase (voir supabase-setup.md),
+// PAS sur le secret de cette clé.
+// Un fichier config.js optionnel (window.__CONFIG__) peut surcharger ces
+// valeurs pour un autre environnement, mais n'est pas requis.
 
-const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.__CONFIG__ ?? {};
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('[supabase-client] window.__CONFIG__ manquant — vérifiez que config.js est chargé avant ce module.');
-}
+const SUPABASE_URL = window.__CONFIG__?.SUPABASE_URL ?? 'https://kwvdseqaljdwqbrjtarh.supabase.co';
+const SUPABASE_ANON_KEY = window.__CONFIG__?.SUPABASE_ANON_KEY ?? 'sb_publishable_y2EXyAtUtiHgN5RDpofCpA_j_nCHiS1';
 
 // La variable globale supabase est fournie par supabase-umd.js
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
