@@ -155,6 +155,7 @@ const App = {
     this.isReversedMode  = localStorage.getItem('flashcards_reversedMode') === 'true';
     const savedSort      = localStorage.getItem('flashcards_sortOption');
     if (savedSort) this.currentSortOption = savedSort;
+    this._setupViewportSizing();
     this.initDarkMode();
     this.initIcons();
     this.initAuth();
@@ -420,11 +421,11 @@ const App = {
     if (!next || current === next) return;
     if (current) {
       current.classList.remove('active');
-      current.style.display = 'none';
+      current.style.display = '';   // laisser .view (sans .active) → display:none via CSS
     }
     // On laisse l'animation CSS `.view.active { animation: viewEnter }` gérer la transition.
-    // (Les anciens styles inline opacity/transform entraient en conflit avec ce keyframe → flicker.)
-    next.style.display = 'flex';
+    // display piloté par les classes pour ne pas écraser le display:grid de #decks-view.active.
+    next.style.display = '';
     next.classList.remove('active');
     void next.offsetWidth;          // force un reflow pour rejouer l'animation proprement
     next.classList.add('active');
@@ -592,6 +593,7 @@ const App = {
 
     if (decks.length === 0) {
       const all = StorageManager.getDecks();
+      this._clearDeckPager(container);
       container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
         <div class="empty-state-icon">${Icons.getIcon('books', 64, 'var(--text-secondary)')}</div>
         <div class="empty-state-text">${all.length === 0 ? 'Aucun deck. Créez-en un !' : 'Aucun deck avec ce tag.'}</div>
@@ -600,7 +602,7 @@ const App = {
     }
 
     const now = Date.now();
-    container.innerHTML = decks.map(deck => {
+    const cardsHtml = decks.map(deck => {
       if (!Array.isArray(deck.cards)) deck.cards = [];
       const due   = deck.cards.filter(c => !c.nextReview || c.nextReview <= now).length;
       const total = deck.cards.length;
@@ -617,9 +619,9 @@ const App = {
           ${due > 0 ? `<span class="cards-due-badge">${due} à réviser</span>` : ''}
         </div>
       </div>`;
-    }).join('');
+    });
 
-    this._attachDeckListeners(container, false);
+    this._renderPaginatedDecks(container, cardsHtml, false);
   },
 
   _attachDeckListeners(container, isBase) {
@@ -637,6 +639,105 @@ const App = {
       );
       this._cardCleanupFns.push(cleanup);
     });
+  },
+
+  // ---- Mise en page « fit-to-viewport » : hauteur de l'écran ----
+  _setupViewportSizing() {
+    const setH = () => {
+      const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${Math.round(h)}px`);
+    };
+    setH();
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', setH);
+    window.addEventListener('resize', setH);
+    window.addEventListener('orientationchange', () => setTimeout(setH, 250));
+  },
+
+  // ---- Pagination par swipe des grilles de decks ----
+  _clearDeckPager(container) {
+    if (!container) return;
+    container._deckCardsHtml = null;
+    container._deckLayoutSig = null;
+    container.classList.remove('deck-pager');
+    container.classList.add('decks-grid');
+    const dots = container.parentElement?.querySelector(':scope > .deck-dots');
+    if (dots) dots.innerHTML = '';
+  },
+
+  _renderPaginatedDecks(container, cardsHtml, isBase) {
+    container._deckCardsHtml = cardsHtml;
+    container._deckIsBase = isBase;
+    container._deckLayoutSig = null; // forcer le rebuild (les données ont changé)
+    // Observer la taille du conteneur : recalcule à la rotation / quand la section devient visible
+    if (!container._deckResizeObs && 'ResizeObserver' in window) {
+      container._deckResizeObs = new ResizeObserver(() => {
+        requestAnimationFrame(() => this._layoutDeckPages(container));
+      });
+      container._deckResizeObs.observe(container);
+    }
+    this._layoutDeckPages(container);
+  },
+
+  _layoutDeckPages(container) {
+    const cardsHtml = container._deckCardsHtml;
+    if (!cardsHtml || !cardsHtml.length) return;
+
+    const rect   = container.getBoundingClientRect();
+    const availW = rect.width  - 32;  // padding horizontal d'une page
+    const availH = rect.height - 12;
+    if (availW < 60 || availH < 60) return; // conteneur caché/non mesurable → l'observer rappellera
+
+    const GAP = 12, MINW = 150, MINH = 118;
+    const cols    = Math.max(1, Math.min(4, Math.floor((availW + GAP) / (MINW + GAP))));
+    const rows    = Math.max(1, Math.floor((availH + GAP) / (MINH + GAP)));
+    const perPage = cols * rows;
+    const tileH   = Math.floor((availH - (rows - 1) * GAP) / rows);
+
+    const sig = `${cols}x${rows}x${cardsHtml.length}`;
+    if (container._deckLayoutSig === sig) return; // layout identique → rien à refaire
+    container._deckLayoutSig = sig;
+
+    const pageCount = Math.ceil(cardsHtml.length / perPage);
+    let html = '';
+    for (let p = 0; p < pageCount; p++) {
+      const slice = cardsHtml.slice(p * perPage, (p + 1) * perPage);
+      html += `<div class="deck-page" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:${tileH}px">${slice.join('')}</div>`;
+    }
+    container.classList.remove('decks-grid');
+    container.classList.add('deck-pager');
+    container.innerHTML = html;
+
+    this._renderDeckDots(container, pageCount);
+    this._attachDeckListeners(container, container._deckIsBase);
+  },
+
+  _renderDeckDots(container, pageCount) {
+    let dots = container.parentElement?.querySelector(':scope > .deck-dots');
+    if (!dots) {
+      dots = document.createElement('div');
+      dots.className = 'deck-dots';
+      container.parentElement?.appendChild(dots);
+    }
+    if (pageCount <= 1) { dots.innerHTML = ''; }
+    else {
+      dots.innerHTML = Array.from({ length: pageCount }, (_, i) =>
+        `<div class="deck-dot${i === 0 ? ' active' : ''}" data-page="${i}"></div>`).join('');
+      dots.querySelectorAll('.deck-dot').forEach(d => {
+        d.addEventListener('click', () => {
+          const i = parseInt(d.dataset.page, 10) || 0;
+          container.scrollTo({ left: i * container.clientWidth, behavior: 'smooth' });
+        });
+      });
+    }
+    // Synchroniser le point actif avec le swipe
+    if (container._pagerOnScroll) container.removeEventListener('scroll', container._pagerOnScroll);
+    container._pagerOnScroll = () => {
+      const w = container.clientWidth || 1;
+      const idx = Math.round(container.scrollLeft / w);
+      dots.querySelectorAll('.deck-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+    };
+    container.addEventListener('scroll', container._pagerOnScroll, { passive: true });
+    container.scrollLeft = 0; // revenir à la page 1 après un re-render
   },
 
   switchDeckSection(section) {
@@ -675,7 +776,15 @@ const App = {
     this.baseDecks = this.getBaseDecksData();
     const now = Date.now();
 
-    container.innerHTML = this.baseDecks.map(deck => {
+    if (!this.baseDecks.length) {
+      this._clearDeckPager(container);
+      container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-text">Aucun deck de base disponible.</div>
+      </div>`;
+      return;
+    }
+
+    const cardsHtml = this.baseDecks.map(deck => {
       const total  = deck.cards.length;
       const scores = JSON.parse(localStorage.getItem(`baseDeckScores_${deck.id}`) || '{}');
       const due    = Object.keys(scores).length > 0
@@ -691,9 +800,9 @@ const App = {
           ${due > 0 ? `<span class="cards-due-badge">${due} à réviser</span>` : ''}
         </div>
       </div>`;
-    }).join('');
+    });
 
-    this._attachDeckListeners(container, true);
+    this._renderPaginatedDecks(container, cardsHtml, true);
   },
 
   openDeck(deckId, isBase = false) {
