@@ -961,6 +961,15 @@ const App = {
     // 3) on bascule vers l'état visible → transition CSS fluide, sans flash
     overlay.style.opacity = '1';
     if (modal) { modal.style.opacity = '1'; modal.style.transform = 'translateY(0) scale(1)'; }
+    // Sur mobile, faire remonter le champ actif au-dessus du clavier virtuel
+    const modalBody = overlay.querySelector('.modal-body');
+    if (modalBody) {
+      modalBody.querySelectorAll('input, textarea, select').forEach(el => {
+        el.addEventListener('focus', () => {
+          setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+        }, { once: false });
+      });
+    }
   },
 
   hideModal() {

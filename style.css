@@ -4,6 +4,9 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Empêche tout élément de provoquer un scroll horizontal parasite */
+img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
+
 /* ============================================================
    DESIGN TOKENS — Light (default)
    ============================================================ */
@@ -147,6 +150,8 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-user-select: none;
@@ -168,6 +173,7 @@ h3 { font-size: clamp(1rem, 4.5vw, 1.25rem); font-weight: 600; }
 .view {
   display: none;
   min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
@@ -208,7 +214,7 @@ h3 { font-size: clamp(1rem, 4.5vw, 1.25rem); font-weight: 600; }
 
 @keyframes confettiFall {
   0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  100% { transform: translateY(110dvh) rotate(720deg); opacity: 0; }
 }
 
 /* ============================================================
@@ -824,8 +830,8 @@ header h1 {
    ============================================================ */
 .fab-container {
   position: fixed;
-  bottom: max(28px, var(--safe-bottom));
-  right: max(22px, var(--safe-right));
+  bottom: calc(var(--safe-bottom) + 18px);
+  right: calc(var(--safe-right) + 18px);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -1109,8 +1115,11 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* scroll si la modale dépasse la zone visible (clavier ouvert, paysage) */
+  overflow-y: auto;
   z-index: 2000;
-  padding: 20px;
+  /* safe-area en padding pour que la modale ne touche pas l'encoche/barre home */
+  padding: max(20px, var(--safe-top)) max(20px, var(--safe-right)) max(20px, var(--safe-bottom)) max(20px, var(--safe-left));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
@@ -1125,12 +1134,15 @@ header h1 {
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 420px;
-  max-height: 85vh;
+  max-height: min(85dvh, 720px);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   transform: translateY(20px) scale(0.97);
   opacity: 0;
   transition: all 0.3s cubic-bezier(0.34, 1.2, 0.64, 1);
+  /* margin:auto permet le centrage même quand overlay est en overflow-y:auto */
+  margin: auto;
+  flex-shrink: 0;
 }
 
 .modal-overlay:not(.hidden) .modal {
@@ -1381,8 +1393,9 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn,
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow-y: auto;
   z-index: 5000;
-  padding: 20px;
+  padding: max(20px, var(--safe-top)) max(20px, var(--safe-right)) max(20px, var(--safe-bottom)) max(20px, var(--safe-left));
   animation: fadeIn 0.2s ease forwards;
 }
 
@@ -1398,6 +1411,8 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn,
   text-align: center;
   box-shadow: var(--shadow-lg);
   animation: modalPop 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+  margin: auto;
+  flex-shrink: 0;
 }
 
 @keyframes modalPop {
@@ -2298,6 +2313,7 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn,
 .donut-chart {
   width: 140px;
   height: 140px;
+  max-width: 100%;
   flex-shrink: 0;
 }
 
@@ -2635,11 +2651,11 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn,
   .toast-container { top: auto; bottom: calc(16px + var(--safe-bottom)); left: 12px; right: 12px; }
   .toast { max-width: none; }
 
-  .fab-container { bottom: max(18px, var(--safe-bottom)); right: max(14px, var(--safe-right)); }
+  .fab-container { bottom: calc(var(--safe-bottom) + 14px); right: calc(var(--safe-right) + 12px); }
   .fab { width: 52px; height: 52px; min-width: 52px; min-height: 52px; }
   .help-fab { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 
-  .modal { max-width: 96%; max-height: 88vh; }
+  .modal { max-width: 96%; max-height: min(88dvh, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px)); }
   .modal-header { padding: 14px 16px; }
   .modal-body { padding: 14px; }
 
@@ -2669,6 +2685,10 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn,
   .search-container, .sort-container { width: 100%; }
   #cards-sort { width: 100%; }
   .cards-list { padding-top: calc(var(--header-h) + var(--safe-top) + 96px); }
+  /* Heatmap : cellules réduites sur très petits écrans pour éviter le débordement */
+  .heatmap-cell { width: 10px; height: 10px; }
+  .heatmap-grid { gap: 3px; }
+  .heatmap-week { gap: 3px; }
 }
 
 @media (min-width: 768px) {
@@ -2676,6 +2696,44 @@ button, .btn, .fab, .icon-btn, .deck-action-btn, .review-btn,
   .flip-card-inner { max-width: 460px; height: 460px; }
   .quiz-question-text { font-size: 24px; }
   .stats-dashboard { padding: 24px 32px; }
+  /* Centrer le contenu dans une colonne lisible sur tablette/desktop */
+  .decks-section-content,
+  .deck-detail-content,
+  .stats-dashboard,
+  .quiz-content {
+    max-width: 960px;
+    margin-inline: auto;
+    width: 100%;
+  }
+}
+
+/* Paysage téléphone (largeur > hauteur, hauteur faible) */
+@media (orientation: landscape) and (max-height: 480px) {
+  :root { --header-h: 44px; --nav-h: 44px; }
+
+  /* Réduire le padding-top des vues pour maximiser l'espace utile */
+  .decks-section-content,
+  .deck-detail-content {
+    padding-top: calc(var(--header-h) + var(--safe-top) + 6px);
+  }
+
+  /* Modales : pleine hauteur scrollable en paysage */
+  .modal {
+    max-height: min(92dvh, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 16px));
+    margin: 0 auto;
+  }
+  .modal-overlay {
+    align-items: flex-start;
+    padding-top: max(12px, var(--safe-top));
+    padding-bottom: max(12px, var(--safe-bottom));
+  }
+
+  /* Carte de révision moins haute en paysage */
+  .review-card { margin-top: calc(var(--header-h) + var(--safe-top) + 8px); }
+  .flip-card-inner { height: 260px; max-width: 480px; }
+
+  /* FAB plus haut pour ne pas chevaucher la nav paysage */
+  .fab-container { bottom: calc(var(--safe-bottom) + 10px); }
 }
 
 @media (min-width: 1200px) {
