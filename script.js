@@ -77,43 +77,152 @@ const Icons = {
       rocket:    `<svg ${s}><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`,
       award:     `<svg ${s}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`,
       check:     `<svg ${s}><polyline points="20 6 9 17 4 12"/></svg>`,
-      layers:    `<svg ${s}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`
+      layers:    `<svg ${s}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+      volume:    `<svg ${s}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`,
+      undo:      `<svg ${s}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
+      pause:     `<svg ${s}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`,
+      play:      `<svg ${s}><polygon points="5 3 19 12 5 21 5 3"/></svg>`
     };
     return icons[name] ?? '';
   }
 };
 
 // ============================================================
-// ALGORITHME SM-2
+// SCHEDULER — répétition espacée façon Anki
+// 4 notes : 0=Encore, 1=Difficile, 2=Bien, 3=Facile
+// + étapes d'apprentissage (sub-jour), rechute (lapse) et détection de "leech".
+// Rétro-compatible avec l'ancien modèle SM-2 (easeFactor/interval/repetitions).
 // ============================================================
-const SM2 = {
-  calculateNextReview(card, quality) {
+const Scheduler = {
+  LEARN_STEPS_MIN: [1, 10],   // étapes d'apprentissage en minutes
+  GRADUATING_INTERVAL: 1,     // jours après graduation (Bien)
+  EASY_INTERVAL: 4,           // jours après graduation directe (Facile)
+  MIN_EASE: 1.3,
+  LEECH_THRESHOLD: 8,         // nb de rechutes → carte mise en suspens
+  DAY: 86_400_000,
+  MIN: 60_000,
+
+  _ensure(card) {
+    card.easeFactor  ??= 2.5;
+    card.interval    ??= 0;
+    card.repetitions ??= 0;
+    card.againCount  ??= 0;
+    card.lapses      ??= 0;
+    card.cardScore   ??= 0;
+    card.learnStep   ??= 0;
+    card.state       ??= (card.repetitions > 0 ? 'review' : 'new'); // new | learning | review
+  },
+
+  /**
+   * Applique une note à une carte (mutation in place).
+   * @returns {{reappear: boolean}} reappear = la carte doit réapparaître dans la session
+   */
+  answer(card, grade) {
+    this._ensure(card);
     const now = Date.now();
-    card.easeFactor  ??= 2.5; card.interval ??= 1;
-    card.repetitions ??= 0;   card.againCount ??= 0; card.cardScore ??= 0;
-    if (quality === 0) {
-      card.againCount++; card.cardScore = Math.max(0, card.cardScore - 10);
-      card.interval = 1; card.repetitions = 0;
-    } else {
-      card.cardScore  += quality === 1 ? 5 : 20;
-      card.easeFactor  = Math.max(1.3, card.easeFactor + (quality === 1 ? -0.15 : 0.15));
-      card.repetitions++;
-      if      (card.repetitions === 1) card.interval = 1;
-      else if (card.repetitions === 2) card.interval = 6;
-      else    card.interval = Math.round(card.interval * card.easeFactor);
-    }
-    card.nextReview = now + card.interval * 86_400_000;
     card.lastReview = now;
+    card.updatedAt  = now;   // pour la fusion de sync (résolution de conflits par carte)
+    let reappear = false;
+
+    // ----- Phase apprentissage (new / learning) -----
+    if (card.state === 'new' || card.state === 'learning') {
+      const steps = this.LEARN_STEPS_MIN;
+      if (grade === 0) {                       // Encore → retour étape 0
+        card.againCount++;
+        card.cardScore = Math.max(0, card.cardScore - 5);
+        card.state = 'learning'; card.learnStep = 0; card.interval = 0;
+        card.nextReview = now + steps[0] * this.MIN; reappear = true;
+      } else if (grade === 1) {                // Difficile → reste sur l'étape
+        card.state = 'learning';
+        card.nextReview = now + steps[Math.min(card.learnStep, steps.length - 1)] * this.MIN;
+        reappear = true;
+      } else if (grade === 2) {                // Bien → étape suivante / graduation
+        card.learnStep++;
+        if (card.learnStep >= steps.length) {
+          card.state = 'review'; card.repetitions = 1;
+          card.interval = this.GRADUATING_INTERVAL;
+          card.nextReview = now + card.interval * this.DAY;
+          card.cardScore += 5;
+        } else {
+          card.state = 'learning';
+          card.nextReview = now + steps[card.learnStep] * this.MIN; reappear = true;
+        }
+      } else {                                 // Facile → graduation immédiate
+        card.state = 'review'; card.repetitions = 1;
+        card.interval = this.EASY_INTERVAL;
+        card.nextReview = now + card.interval * this.DAY;
+        card.cardScore += 15;
+      }
+      return { reappear };
+    }
+
+    // ----- Phase révision (review) -----
+    if (grade === 0) {                          // rechute
+      card.againCount++; card.lapses++;
+      card.repetitions = 0;
+      card.easeFactor = Math.max(this.MIN_EASE, card.easeFactor - 0.2);
+      card.cardScore = Math.max(0, card.cardScore - 10);
+      card.state = 'learning'; card.learnStep = 0; card.interval = 0;
+      card.nextReview = now + this.LEARN_STEPS_MIN[0] * this.MIN;
+      reappear = true;
+      if (card.lapses >= this.LEECH_THRESHOLD) {  // leech → suspens auto
+        card.suspended = true; card.isLeech = true; reappear = false;
+      }
+    } else {
+      card.repetitions++;
+      const ease = card.easeFactor;
+      const base = card.interval || 1;
+      if (grade === 1) {                        // Difficile
+        card.easeFactor = Math.max(this.MIN_EASE, ease - 0.15);
+        card.interval = Math.max(1, Math.round(base * 1.2));
+        card.cardScore += 3;
+      } else if (grade === 2) {                 // Bien
+        card.interval = Math.max(1, Math.round(base * ease));
+        card.cardScore += 5;
+      } else {                                  // Facile
+        card.easeFactor = ease + 0.15;
+        card.interval = Math.max(1, Math.round(base * ease * 1.3));
+        card.cardScore += 15;
+      }
+      card.nextReview = now + card.interval * this.DAY;
+    }
+    return { reappear };
+  },
+
+  /** Aperçu (sans mutation) de l'intervalle pour une note donnée — affiché sur les boutons. */
+  preview(card, grade) {
+    const clone = JSON.parse(JSON.stringify(card));
+    this.answer(clone, grade);
+    if (clone.state === 'learning' || clone.state === 'new') {
+      const min = Math.max(1, Math.round((clone.nextReview - Date.now()) / this.MIN));
+      return min < 60 ? `${min} min` : `${Math.round(min / 60)} h`;
+    }
+    return this._fmtDays(clone.interval);
+  },
+  _fmtDays(d) {
+    if (d < 1)   return '<1 j';
+    if (d < 30)  return `${d} j`;
+    if (d < 365) return `${Math.round(d / 30)} mois`;
+    return `${(d / 365).toFixed(1)} an`;
+  },
+
+  /** Compatibilité : ancienne signature à 3 notes (0/1/2). */
+  calculateNextReview(card, quality) {
+    // Remap : 0→Encore, 1→Bien, 2→Facile
+    this.answer(card, quality === 0 ? 0 : quality === 1 ? 2 : 3);
     return card;
   },
+
   getCardsToReview(deck, limit = null) {
     const now = Date.now();
-    const scored = deck.cards.map(card => {
-      const score     = card.cardScore ?? 0;
-      const isDue     = !card.nextReview || card.nextReview <= now;
-      const daysSince = card.lastReview ? Math.floor((now - card.lastReview) / 86_400_000) : 999;
-      return { card, finalScore: score - (isDue ? 5 : 0) + Math.min(daysSince, 30) };
-    });
+    const scored = deck.cards
+      .filter(card => !card.suspended)
+      .map(card => {
+        const score     = card.cardScore ?? 0;
+        const isDue     = !card.nextReview || card.nextReview <= now;
+        const daysSince = card.lastReview ? Math.floor((now - card.lastReview) / 86_400_000) : 999;
+        return { card, finalScore: score - (isDue ? 5 : 0) + Math.min(daysSince, 30) };
+      });
     scored.sort((a, b) => a.finalScore - b.finalScore);
     const result = scored.map(s => s.card);
     return limit ? result.slice(0, limit) : result;
@@ -126,6 +235,25 @@ const SM2 = {
 const ColorZones = {
   getCardColor(score) { if (score < 10) return '#F44336'; if (score < 20) return '#FF9800'; if (score < 30) return '#FFC107'; return '#4CAF50'; },
   getZoneName(score) { if (score < 10) return 'Très difficile'; if (score < 20) return 'Difficile'; if (score < 30) return 'Moyen'; return 'Facile'; }
+};
+
+// ============================================================
+// CLOZE — texte à trous façon Anki : {{c1::réponse}} ou {{c1::réponse::indice}}
+// v1 : toutes les occlusions sont masquées au recto, révélées au verso.
+// L'entrée est échappée (escapeHtml) AVANT le remplacement → injection sûre.
+// ============================================================
+const Cloze = {
+  RE: /\{\{c\d+::(.*?)(?:::(.*?))?\}\}/g,
+  isCloze(card) { return card?.type === 'cloze'; },
+  has(text)     { return /\{\{c\d+::/.test(text || ''); },
+  front(escapedText) {
+    return escapedText.replace(this.RE, (_, _content, hint) =>
+      `<span class="cloze-blank">[${hint ? hint : '…'}]</span>`);
+  },
+  back(escapedText) {
+    return escapedText.replace(this.RE, (_, content) =>
+      `<span class="cloze-answer">${content}</span>`);
+  }
 };
 
 // ============================================================
@@ -148,6 +276,8 @@ const App = {
   currentMenuActions: [],
   _cardCleanupFns: [],
   _remindersSynced: false,
+  _undoStack: [],
+  ttsEnabled: false,
 
   // ---- Init ----
   async init() {
@@ -177,6 +307,12 @@ const App = {
     });
     window.addEventListener('shardcards:quota-exceeded', () => {
       this.showToast('Espace de stockage plein. Supprimez des decks ou des images.', 'error');
+    });
+    // MathJax chargé en différé : re-typeset la vue active dès qu'il est prêt
+    // (couvre le cas où on ouvre un deck/révision avant la fin du chargement).
+    window.MathJax?.startup?.promise?.then(() => {
+      const active = document.querySelector('.view.active');
+      if (active) this.renderMath(active);
     });
   },
 
@@ -404,9 +540,23 @@ const App = {
 
     // Révision
     document.getElementById('review-card')?.addEventListener('click', () => this.revealAnswer());
-    document.getElementById('again-btn')?.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (this.isRevealed) { this.addButtonFeedback(e.currentTarget); this.rateCard(0); } });
-    document.getElementById('good-btn')?.addEventListener('click',  e => { e.preventDefault(); e.stopPropagation(); if (this.isRevealed) { this.addButtonFeedback(e.currentTarget); this.rateCard(1); } });
-    document.getElementById('easy-btn')?.addEventListener('click',  e => { e.preventDefault(); e.stopPropagation(); if (this.isRevealed) { this.addButtonFeedback(e.currentTarget); this.rateCard(2); } });
+    const grade = (e, g) => { e.preventDefault(); e.stopPropagation(); if (this.isRevealed) { this.addButtonFeedback(e.currentTarget); this.rateCard(g); } };
+    document.getElementById('again-btn')?.addEventListener('click', e => grade(e, 0));
+    document.getElementById('hard-btn')?.addEventListener('click',  e => grade(e, 1));
+    document.getElementById('good-btn')?.addEventListener('click',  e => grade(e, 2));
+    document.getElementById('easy-btn')?.addEventListener('click',  e => grade(e, 3));
+    document.getElementById('review-undo-btn')?.addEventListener('click', e => { e.preventDefault(); this.undoReview(); });
+    document.getElementById('review-tts-btn')?.addEventListener('click', e => { e.preventDefault(); this.toggleTts(); });
+
+    // Raccourcis clavier (révision) : Espace = retourner, 1-4 = noter, Z = annuler
+    document.addEventListener('keydown', e => {
+      if (this.currentView !== 'review') return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.isRevealed ? null : this.revealCard(); }
+      else if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); this.undoReview(); }
+      else if (['1', '2', '3', '4'].includes(e.key) && this.isRevealed) { e.preventDefault(); this.rateCard(parseInt(e.key, 10) - 1); }
+    });
 
     // Modal
     document.querySelector('.modal-close')?.addEventListener('click', () => this.hideModal());
@@ -593,7 +743,7 @@ const App = {
 
     if (decks.length === 0) {
       const all = StorageManager.getDecks();
-      this._clearDeckPager(container);
+      this._teardownPager(container);
       container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
         <div class="empty-state-icon">${Icons.getIcon('books', 64, 'var(--text-secondary)')}</div>
         <div class="empty-state-text">${all.length === 0 ? 'Aucun deck. Créez-en un !' : 'Aucun deck avec ce tag.'}</div>
@@ -621,7 +771,7 @@ const App = {
       </div>`;
     });
 
-    this._renderPaginatedDecks(container, cardsHtml, false);
+    this._renderDeckGrid(container, cardsHtml, false);
   },
 
   _attachDeckListeners(container, isBase) {
@@ -653,91 +803,24 @@ const App = {
     window.addEventListener('orientationchange', () => setTimeout(setH, 250));
   },
 
-  // ---- Pagination par swipe des grilles de decks ----
-  _clearDeckPager(container) {
+  // ---- Grille de decks (scroll vertical simple) ----
+  // Démonte les artefacts de l'ancien pager horizontal (observer, dots, listener de scroll).
+  _teardownPager(container) {
     if (!container) return;
+    container._deckResizeObs?.disconnect?.();
+    container._deckResizeObs = null;
+    if (container._pagerOnScroll) { container.removeEventListener('scroll', container._pagerOnScroll); container._pagerOnScroll = null; }
     container._deckCardsHtml = null;
     container._deckLayoutSig = null;
+    container.parentElement?.querySelector(':scope > .deck-dots')?.remove();
     container.classList.remove('deck-pager');
     container.classList.add('decks-grid');
-    const dots = container.parentElement?.querySelector(':scope > .deck-dots');
-    if (dots) dots.innerHTML = '';
   },
 
-  _renderPaginatedDecks(container, cardsHtml, isBase) {
-    container._deckCardsHtml = cardsHtml;
-    container._deckIsBase = isBase;
-    container._deckLayoutSig = null; // forcer le rebuild (les données ont changé)
-    // Observer la taille du conteneur : recalcule à la rotation / quand la section devient visible
-    if (!container._deckResizeObs && 'ResizeObserver' in window) {
-      container._deckResizeObs = new ResizeObserver(() => {
-        requestAnimationFrame(() => this._layoutDeckPages(container));
-      });
-      container._deckResizeObs.observe(container);
-    }
-    this._layoutDeckPages(container);
-  },
-
-  _layoutDeckPages(container) {
-    const cardsHtml = container._deckCardsHtml;
-    if (!cardsHtml || !cardsHtml.length) return;
-
-    const rect   = container.getBoundingClientRect();
-    const availW = rect.width  - 32;  // padding horizontal d'une page
-    const availH = rect.height - 12;
-    if (availW < 60 || availH < 60) return; // conteneur caché/non mesurable → l'observer rappellera
-
-    const GAP = 12, MINW = 150, MINH = 118;
-    const cols    = Math.max(1, Math.min(4, Math.floor((availW + GAP) / (MINW + GAP))));
-    const rows    = Math.max(1, Math.floor((availH + GAP) / (MINH + GAP)));
-    const perPage = cols * rows;
-    const tileH   = Math.floor((availH - (rows - 1) * GAP) / rows);
-
-    const sig = `${cols}x${rows}x${cardsHtml.length}`;
-    if (container._deckLayoutSig === sig) return; // layout identique → rien à refaire
-    container._deckLayoutSig = sig;
-
-    const pageCount = Math.ceil(cardsHtml.length / perPage);
-    let html = '';
-    for (let p = 0; p < pageCount; p++) {
-      const slice = cardsHtml.slice(p * perPage, (p + 1) * perPage);
-      html += `<div class="deck-page" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:${tileH}px">${slice.join('')}</div>`;
-    }
-    container.classList.remove('decks-grid');
-    container.classList.add('deck-pager');
-    container.innerHTML = html;
-
-    this._renderDeckDots(container, pageCount);
-    this._attachDeckListeners(container, container._deckIsBase);
-  },
-
-  _renderDeckDots(container, pageCount) {
-    let dots = container.parentElement?.querySelector(':scope > .deck-dots');
-    if (!dots) {
-      dots = document.createElement('div');
-      dots.className = 'deck-dots';
-      container.parentElement?.appendChild(dots);
-    }
-    if (pageCount <= 1) { dots.innerHTML = ''; }
-    else {
-      dots.innerHTML = Array.from({ length: pageCount }, (_, i) =>
-        `<div class="deck-dot${i === 0 ? ' active' : ''}" data-page="${i}"></div>`).join('');
-      dots.querySelectorAll('.deck-dot').forEach(d => {
-        d.addEventListener('click', () => {
-          const i = parseInt(d.dataset.page, 10) || 0;
-          container.scrollTo({ left: i * container.clientWidth, behavior: 'smooth' });
-        });
-      });
-    }
-    // Synchroniser le point actif avec le swipe
-    if (container._pagerOnScroll) container.removeEventListener('scroll', container._pagerOnScroll);
-    container._pagerOnScroll = () => {
-      const w = container.clientWidth || 1;
-      const idx = Math.round(container.scrollLeft / w);
-      dots.querySelectorAll('.deck-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
-    };
-    container.addEventListener('scroll', container._pagerOnScroll, { passive: true });
-    container.scrollLeft = 0; // revenir à la page 1 après un re-render
+  _renderDeckGrid(container, cardsHtml, isBase) {
+    this._teardownPager(container);
+    container.innerHTML = cardsHtml.join('');
+    this._attachDeckListeners(container, isBase);
   },
 
   switchDeckSection(section) {
@@ -777,7 +860,7 @@ const App = {
     const now = Date.now();
 
     if (!this.baseDecks.length) {
-      this._clearDeckPager(container);
+      this._teardownPager(container);
       container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
         <div class="empty-state-text">Aucun deck de base disponible.</div>
       </div>`;
@@ -802,7 +885,7 @@ const App = {
       </div>`;
     });
 
-    this._renderPaginatedDecks(container, cardsHtml, true);
+    this._renderDeckGrid(container, cardsHtml, true);
   },
 
   openDeck(deckId, isBase = false) {
@@ -876,16 +959,29 @@ const App = {
       const zone     = ColorZones.getZoneName(score);
       const frontImg = (card.frontImage?.trim()) ? `<img src="${escapeHtml(card.frontImage)}" alt="" class="card-grid-img">` : '';
       const backImg  = (card.backImage?.trim())  ? `<img src="${escapeHtml(card.backImage)}"  alt="" class="card-grid-img">` : '';
+      const suspended = !!card.suspended;
+      const suspendLabel = suspended ? 'Réactiver' : 'Suspendre';
+      const suspendIcon  = suspended ? 'play' : 'pause';
       const actions  = this.currentIsBaseDeck ? '' : `
-        <button class="card-action-btn-compact" data-card-index="${index}" data-action="edit">${Icons.getIcon('edit', 14)} Modifier</button>
-        <button class="card-action-btn-compact card-action-btn-delete" data-card-index="${index}" data-action="delete">${Icons.getIcon('delete', 14)} Supprimer</button>`;
-      return `<div class="card-grid-item" data-score="${score}">
-        <span class="card-difficulty-badge" style="background:${color};" title="${zone}"></span>
-        <div class="card-grid-section"><div class="card-grid-label">Recto</div>${frontImg}<div class="card-grid-text">${escapeHtml(card.front) || '<span class="card-grid-empty">-</span>'}</div></div>
-        <div class="card-grid-section"><div class="card-grid-label">Verso</div>${backImg}<div class="card-grid-text">${escapeHtml(card.back) || '<span class="card-grid-empty">-</span>'}</div></div>
+        <button class="card-action-btn-compact" data-card-index="${index}" data-action="suspend" title="${suspendLabel}" aria-label="${suspendLabel}">${Icons.getIcon(suspendIcon, 16)}</button>
+        <button class="card-action-btn-compact" data-card-index="${index}" data-action="edit" title="Modifier" aria-label="Modifier">${Icons.getIcon('edit', 16)}</button>
+        <button class="card-action-btn-compact card-action-btn-delete" data-card-index="${index}" data-action="delete" title="Supprimer" aria-label="Supprimer">${Icons.getIcon('delete', 16)}</button>`;
+      const suspBadge = suspended ? `<span class="card-suspended-badge" title="En suspens">${Icons.getIcon('pause', 11, 'currentColor')}</span>` : '';
+      const isCloze   = Cloze.isCloze(card);
+      const typeBadge = isCloze ? `<span class="card-type-badge" title="Texte à trous">trous</span>` : '';
+      const frontLbl  = isCloze ? 'Texte à trous' : 'Recto';
+      const backLbl   = isCloze ? 'Complément' : 'Verso';
+      const frontTxt  = isCloze ? (Cloze.back(escapeHtml(card.front || '')) || '<span class="card-grid-empty">-</span>')
+                                : (escapeHtml(card.front) || '<span class="card-grid-empty">-</span>');
+      const backTxt   = escapeHtml(card.back) || '<span class="card-grid-empty">-</span>';
+      return `<div class="card-grid-item${suspended ? ' card-suspended' : ''}" data-score="${score}">
+        <span class="card-difficulty-badge" style="background:${color};" title="${zone}"></span>${suspBadge}${typeBadge}
+        <div class="card-grid-section"><div class="card-grid-label">${frontLbl}</div>${frontImg}<div class="card-grid-text">${frontTxt}</div></div>
+        <div class="card-grid-section"><div class="card-grid-label">${backLbl}</div>${backImg}<div class="card-grid-text">${backTxt}</div></div>
         <div class="card-grid-actions">${actions}</div>
       </div>`;
     }).join('');
+    this.renderMath(container);
 
     if (!this.currentIsBaseDeck) {
       container.querySelectorAll('.card-action-btn-compact').forEach(btn => {
@@ -894,6 +990,7 @@ const App = {
         btn.addEventListener('click', e => {
           e.preventDefault(); e.stopPropagation();
           if (action === 'edit') this.showEditCardModal(idx);
+          else if (action === 'suspend') this.toggleSuspendCard(idx);
           else this.deleteCard(idx);
         });
       });
@@ -902,14 +999,40 @@ const App = {
 
   // ---- Révision ----
 
+  // Construit la session : cartes dues, plafonnées par type selon les options du deck
+  // (nouvelles/session, révisions/session) ou le défaut global `cardsPerSession`.
+  _buildReviewSession(deck) {
+    const now    = Date.now();
+    const opt    = deck.options ?? {};
+    const nLimit = Number.isFinite(opt.newPerDay)     ? opt.newPerDay     : this.cardsPerSession;
+    const rLimit = Number.isFinite(opt.reviewsPerDay) ? opt.reviewsPerDay : this.cardsPerSession;
+    const pool   = Scheduler.getCardsToReview(deck);  // non-suspendues, triées (difficiles d'abord)
+    const isNew  = c => (c.state ? c.state === 'new' : ((c.repetitions ?? 0) === 0 && !c.lastReview));
+    const isDue  = c => !c.nextReview || c.nextReview <= now;
+    const newCards = pool.filter(c => isNew(c)).slice(0, nLimit);
+    const revCards = pool.filter(c => !isNew(c) && isDue(c)).slice(0, rLimit);
+    return [...revCards, ...newCards];
+  },
+
   showReviewView() {
     if (!this.currentDeckId) return;
     const deck = this.getCurrentDeck();
     if (!deck) return;
-    this.reviewCards = SM2.getCardsToReview(deck, this.cardsPerSession);
-    if (this.reviewCards.length === 0) { this.showToast('Aucune carte à réviser pour le moment !', 'info'); return; }
+    this.reviewCards = this._buildReviewSession(deck);
+    if (this.reviewCards.length === 0) {
+      const hasSuspended = deck.cards.some(c => c.suspended);
+      this.showToast(hasSuspended ? 'Rien à réviser (cartes en suspens exclues).' : 'Aucune carte à réviser pour le moment !', 'info');
+      return;
+    }
     this.currentReviewIndex = 0;
     this.isRevealed = false;
+    this._undoStack = [];
+    this._reviewedCount = 0;
+    // Icônes des contrôles d'en-tête
+    const undoBtn = document.getElementById('review-undo-btn');
+    const ttsBtn  = document.getElementById('review-tts-btn');
+    if (undoBtn) { undoBtn.innerHTML = Icons.getIcon('undo', 20, 'currentColor'); undoBtn.disabled = true; }
+    if (ttsBtn)  ttsBtn.innerHTML = Icons.getIcon('volume', 20, 'currentColor');
     this.showView('review');
     this.showReviewCard();
   },
@@ -917,13 +1040,8 @@ const App = {
   showReviewCard() {
     if (this.currentReviewIndex >= this.reviewCards.length) { this.completeReview(); return; }
     const card     = this.reviewCards[this.currentReviewIndex];
-    const reversed = this.isReversedMode;
-    const dFront      = reversed ? card.back  : card.front;
-    const dBack       = reversed ? card.front : card.back;
-    const dFrontImage = reversed ? card.backImage  : card.frontImage;
-    const dBackImage  = reversed ? card.frontImage : card.backImage;
-    const frontLabel  = reversed ? 'Réponse' : 'Question';
-    const backLabel   = reversed ? 'Question' : 'Réponse';
+    const isCloze  = Cloze.isCloze(card);
+    const reversed = this.isReversedMode && !isCloze;  // mode inversé désactivé pour les cloze
 
     const buildHtml = (text, image, label) => {
       let html = '';
@@ -934,6 +1052,25 @@ const App = {
       if (!hasImg && !hasText) html = `<p class="review-text" style="color:var(--text-secondary);font-style:italic">Aucun contenu</p>`;
       return html;
     };
+
+    let frontHtml, backHtml, frontLabel, backLabel;
+    if (isCloze) {
+      frontLabel = 'Texte à trous'; backLabel = 'Réponse';
+      const esc  = escapeHtml(card.front || '');
+      const imgF = card.frontImage?.trim() ? `<div class="review-image-container"><img src="${escapeHtml(card.frontImage)}" alt="" class="review-image"></div>` : '';
+      frontHtml  = imgF + `<p class="review-text">${Cloze.front(esc)}</p>`;
+      backHtml   = imgF + `<p class="review-text">${Cloze.back(esc)}</p>`;
+      if (card.back?.trim()) backHtml += `<p class="review-text cloze-extra">${escapeHtml(card.back)}</p>`;
+    } else {
+      const dFront      = reversed ? card.back  : card.front;
+      const dBack       = reversed ? card.front : card.back;
+      const dFrontImage = reversed ? card.backImage  : card.frontImage;
+      const dBackImage  = reversed ? card.frontImage : card.backImage;
+      frontLabel = reversed ? 'Réponse' : 'Question';
+      backLabel  = reversed ? 'Question' : 'Réponse';
+      frontHtml  = buildHtml(dFront, dFrontImage, frontLabel);
+      backHtml   = buildHtml(dBack,  dBackImage,  backLabel);
+    }
 
     const reviewCard = document.getElementById('review-card');
     const inner      = document.getElementById('flip-card-inner');
@@ -952,14 +1089,16 @@ const App = {
     const fc = document.getElementById('front-content');
     const bc = document.getElementById('back-content');
     const fi = document.getElementById('flip-card-inner');
-    if (fc) fc.innerHTML = buildHtml(dFront, dFrontImage, frontLabel);
-    if (bc) bc.innerHTML = buildHtml(dBack,  dBackImage,  backLabel);
+    if (fc) { fc.innerHTML = frontHtml; this.renderMath(fc); }
+    if (bc) { bc.innerHTML = backHtml;  this.renderMath(bc); }
     if (fi) fi.classList.remove('flipped');
 
     const prog = document.getElementById('review-progress');
     if (prog) prog.textContent = `${this.currentReviewIndex + 1} / ${this.reviewCards.length}`;
     this.isRevealed = false;
     document.getElementById('review-buttons')?.classList.add('hidden');
+
+    if (this.ttsEnabled) this.speakCurrent();
   },
 
   revealAnswer() { this.toggleCard(); },
@@ -974,6 +1113,7 @@ const App = {
       if (this.isRevealed) setTimeout(() => btns.classList.remove('hidden'), 300);
       else btns.classList.add('hidden');
     }
+    if (this.isRevealed && this.ttsEnabled) this.speakCurrent();
   },
 
   revealCard() {
@@ -981,30 +1121,60 @@ const App = {
     if (fi && !fi.classList.contains('flipped')) { fi.classList.add('flipped'); this.isRevealed = true; const btns = document.getElementById('review-buttons'); if (btns) setTimeout(() => btns.classList.remove('hidden'), 300); }
   },
 
-  rateCard(quality) {
+  // Champs de planification persistés par carte.
+  _SCHED_FIELDS: ['cardScore', 'nextReview', 'lastReview', 'easeFactor', 'interval', 'repetitions', 'againCount', 'lapses', 'learnStep', 'state', 'suspended', 'isLeech', 'updatedAt'],
+
+  _persistReviewState(card) {
+    const deck = this.getCurrentDeck();
+    if (!deck) return;
+    const idx = card.id
+      ? deck.cards.findIndex(c => c.id === card.id)
+      : deck.cards.findIndex(c => c.front === card.front && c.back === card.back);
+    if (idx >= 0 && deck.cards[idx] !== card) {
+      const patch = {};
+      this._SCHED_FIELDS.forEach(f => { patch[f] = card[f]; });
+      Object.assign(deck.cards[idx], patch);
+    }
+    if (this.currentIsBaseDeck) {
+      const scores = {};
+      deck.cards.forEach((c, i) => {
+        scores[i] = {};
+        this._SCHED_FIELDS.forEach(f => { scores[i][f] = c[f] ?? null; });
+      });
+      localStorage.setItem(`baseDeckScores_${this.currentDeckId}`, JSON.stringify(scores));
+    } else {
+      StorageManager.saveDeck(deck);
+    }
+  },
+
+  rateCard(grade) {
     if (!this.isRevealed) this.revealCard();
     if (this.currentReviewIndex >= this.reviewCards.length) { this.completeReview(); return; }
     const card = this.reviewCards[this.currentReviewIndex];
     if (!card) { this.completeReview(); return; }
 
-    this._flashReviewFeedback(quality);
-    SM2.calculateNextReview(card, quality);
-    const deck = this.getCurrentDeck();
-    if (deck) {
-      const idx = deck.cards.findIndex(c => c.front === card.front && c.back === card.back);
-      if (idx >= 0) {
-        const dc = deck.cards[idx];
-        Object.assign(dc, { cardScore: card.cardScore, nextReview: card.nextReview, lastReview: card.lastReview, easeFactor: card.easeFactor, interval: card.interval, repetitions: card.repetitions, againCount: card.againCount });
-      }
-      if (this.currentIsBaseDeck) {
-        const key = `baseDeckScores_${this.currentDeckId}`;
-        const scores = {};
-        deck.cards.forEach((c, i) => { scores[i] = { cardScore: c.cardScore ?? 0, nextReview: c.nextReview ?? null, easeFactor: c.easeFactor ?? 2.5, interval: c.interval ?? 0, repetitions: c.repetitions ?? 0, lastReview: c.lastReview ?? null, againCount: c.againCount ?? 0 }; });
-        localStorage.setItem(key, JSON.stringify(scores));
-      } else {
-        StorageManager.saveDeck(deck);
-      }
+    // Snapshot pour annulation (Undo)
+    const before = {};
+    Scheduler._ensure(card);
+    this._SCHED_FIELDS.forEach(f => { before[f] = card[f]; });
+    this._undoStack.push({ card, before, index: this.currentReviewIndex, queueLen: this.reviewCards.length });
+
+    this._flashReviewFeedback(grade);
+    const { reappear } = Scheduler.answer(card, grade);
+    this._logReview(grade);
+    this._persistReviewState(card);
+
+    if (card.isLeech && card.suspended) {
+      this.showToast('Carte difficile mise en suspens (leech).', 'warning');
+      card.isLeech = false; // ne notifier qu'une fois
     }
+
+    // Étapes d'apprentissage : la carte réapparaît plus loin dans la session
+    if (reappear) this.reviewCards.push(card);
+    else this._reviewedCount = (this._reviewedCount || 0) + 1;
+
+    const undoBtn = document.getElementById('review-undo-btn');
+    if (undoBtn) undoBtn.disabled = false;
 
     this.currentReviewIndex++;
     document.getElementById('review-buttons')?.classList.add('hidden');
@@ -1023,10 +1193,59 @@ const App = {
     });
   },
 
+  // ---- Annulation (Undo) ----
+  undoReview() {
+    const snap = this._undoStack.pop();
+    if (!snap) { this.showToast('Rien à annuler.', 'info'); return; }
+    // Restaure l'état de planification de la carte
+    Object.assign(snap.card, snap.before);
+    // Retire une éventuelle réapparition ajoutée par cette note
+    if (this.reviewCards.length > snap.queueLen) this.reviewCards.length = snap.queueLen;
+    else if (this._reviewedCount > 0) this._reviewedCount--;
+    this.currentReviewIndex = snap.index;
+    this._persistReviewState(snap.card);
+    if (this._undoStack.length === 0) { const b = document.getElementById('review-undo-btn'); if (b) b.disabled = true; }
+    // Recharge la carte (sans animation de flip)
+    const inner = document.getElementById('flip-card-inner');
+    if (inner) inner.style.transition = 'none';
+    this.isRevealed = false;
+    this.showReviewCard();
+    if (inner) requestAnimationFrame(() => { inner.style.transition = ''; });
+  },
+
+  // ---- Synthèse vocale (TTS) ----
+  toggleTts() {
+    this.ttsEnabled = !this.ttsEnabled;
+    const btn = document.getElementById('review-tts-btn');
+    if (btn) btn.classList.toggle('active', this.ttsEnabled);
+    if (this.ttsEnabled) this.speakCurrent();
+    else if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    this.showToast(this.ttsEnabled ? 'Lecture audio activée' : 'Lecture audio désactivée', 'info');
+  },
+
+  speakCurrent() {
+    if (!('speechSynthesis' in window)) { this.showToast('Synthèse vocale non disponible.', 'error'); return; }
+    const card = this.reviewCards[this.currentReviewIndex];
+    if (!card) return;
+    const reversed = this.isReversedMode && !Cloze.isCloze(card);
+    const front = reversed ? card.back : card.front;
+    const back  = reversed ? card.front : card.back;
+    let text    = this.isRevealed ? back : front;
+    // Cloze : retirer le balisage {{cN::…}} pour la lecture vocale
+    text = (text || '').replace(Cloze.RE, (_, content) => content);
+    if (!text.trim()) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'fr-FR'; u.rate = 0.95;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  },
+
   completeReview() {
-    const total      = this.reviewCards.length;
-    const againCount = this.reviewCards.filter(c => (c.cardScore ?? 0) === 0 || c.againCount > 0).length;
-    const score      = Math.round(((total - Math.min(againCount, total)) / total) * 100);
+    // Cartes uniques (la même carte peut réapparaître via les étapes d'apprentissage)
+    const unique     = Array.from(new Set(this.reviewCards));
+    const total      = unique.length;
+    const againCount = unique.filter(c => (c.againCount ?? 0) > 0 || (c.lapses ?? 0) > 0).length;
+    const score      = total ? Math.round(((total - Math.min(againCount, total)) / total) * 100) : 0;
 
     // Log activity
     this._logActivity(total);
@@ -1188,15 +1407,28 @@ const App = {
   showAddCardModal() {
     if (this.currentIsBaseDeck) { this.showToast('Deck en lecture seule.', 'error'); return; }
     const content = `<form id="add-card-form">
-      <div class="form-group"><label>Recto</label><textarea id="new-card-front" placeholder="Question"></textarea></div>
+      <div class="form-group">
+        <label for="new-card-type">Type de carte</label>
+        <div class="custom-select-wrapper">
+          <select id="new-card-type" class="custom-select">
+            <option value="basic">Basique (recto / verso)</option>
+            <option value="cloze">Texte à trous (cloze)</option>
+          </select>
+          <div class="custom-select-arrow">${Icons.getIcon('arrowDown', 12)}</div>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);margin:-4px 0 12px">Maths : écrivez du LaTeX entre <code>$…$</code> (ex : <code>$x^2+1$</code>) ou <code>$$…$$</code> pour une formule centrée.</p>
+      <p id="cloze-hint" style="display:none;font-size:12px;color:var(--text-secondary);margin:-4px 0 8px">Sélectionnez un mot puis « Créer un trou », ou tapez <code>{{c1::réponse}}</code> (indice optionnel : <code>{{c1::réponse::indice}}</code>).</p>
+      <div class="form-group"><label id="lbl-front">Recto</label><textarea id="new-card-front" placeholder="Question"></textarea></div>
+      <button type="button" id="cloze-insert-btn" class="btn btn-secondary" style="display:none;margin:-4px 0 12px">Créer un trou {{c…}}</button>
       <div class="form-group">
         <label>Image recto (optionnel)</label>
         <label for="new-card-front-img" class="btn-import-image" style="cursor:pointer;display:inline-block;color:white">Choisir un fichier</label>
         <input type="file" id="new-card-front-img" accept="image/*" style="display:none">
         <div id="prev-front" class="image-preview" style="display:none"><img id="prev-front-img" class="preview-image" alt=""><button type="button" class="btn-remove-preview" data-side="front">×</button></div>
       </div>
-      <div class="form-group"><label>Verso</label><textarea id="new-card-back" placeholder="Réponse"></textarea></div>
-      <div class="form-group">
+      <div class="form-group"><label id="lbl-back">Verso</label><textarea id="new-card-back" placeholder="Réponse"></textarea></div>
+      <div class="form-group" id="grp-back-img">
         <label>Image verso (optionnel)</label>
         <label for="new-card-back-img" class="btn-import-image" style="cursor:pointer;display:inline-block;color:white">Choisir un fichier</label>
         <input type="file" id="new-card-back-img" accept="image/*" style="display:none">
@@ -1211,24 +1443,55 @@ const App = {
     setTimeout(() => {
       const form = document.getElementById('add-card-form');
       if (!form) return;
+      const typeSel = document.getElementById('new-card-type');
+      const applyType = () => {
+        const cloze = typeSel.value === 'cloze';
+        document.getElementById('cloze-hint').style.display = cloze ? 'block' : 'none';
+        document.getElementById('cloze-insert-btn').style.display = cloze ? 'inline-flex' : 'none';
+        document.getElementById('lbl-front').textContent = cloze ? 'Texte (avec trous)' : 'Recto';
+        document.getElementById('lbl-back').textContent  = cloze ? 'Complément (optionnel)' : 'Verso';
+        document.getElementById('new-card-front').placeholder = cloze ? 'Ex : La capitale de la France est {{c1::Paris}}' : 'Question';
+      };
+      typeSel?.addEventListener('change', applyType); applyType();
+      document.getElementById('cloze-insert-btn')?.addEventListener('click', () => this._insertCloze(document.getElementById('new-card-front')));
       document.getElementById('add-card-cancel')?.addEventListener('click', () => this.hideModal());
       document.getElementById('new-card-front-img')?.addEventListener('change', e => this.handleImageUpload(e.target.files[0], 'front', form));
       document.getElementById('new-card-back-img')?.addEventListener('change',  e => this.handleImageUpload(e.target.files[0], 'back',  form));
       form.querySelectorAll('.btn-remove-preview').forEach(btn => btn.addEventListener('click', () => this.removePreview(btn.dataset.side, form)));
       form.addEventListener('submit', e => {
         e.preventDefault();
+        const type  = typeSel?.value === 'cloze' ? 'cloze' : 'basic';
         const front = form.querySelector('#new-card-front')?.value.trim() ?? '';
         const back  = form.querySelector('#new-card-back')?.value.trim()  ?? '';
         const fi    = form.dataset.frontImage ?? '';
         const bi    = form.dataset.backImage  ?? '';
-        if (!front && !fi) { this.showToast('Recto requis (texte ou image).', 'error'); return; }
-        if (!back  && !bi) { this.showToast('Verso requis (texte ou image).', 'error'); return; }
-        this.addCardWithValues(front, back, fi, bi);
+        if (type === 'cloze') {
+          if (!Cloze.has(front)) { this.showToast('Ajoutez au moins un trou : {{c1::réponse}}.', 'error'); return; }
+        } else {
+          if (!front && !fi) { this.showToast('Recto requis (texte ou image).', 'error'); return; }
+          if (!back  && !bi) { this.showToast('Verso requis (texte ou image).', 'error'); return; }
+        }
+        this.addCardWithValues(front, back, fi, bi, type);
       });
     }, 50);
   },
 
-  async addCardWithValues(front, back, frontImage, backImage) {
+  _insertCloze(ta) {
+    if (!ta) return;
+    const val   = ta.value;
+    const start = ta.selectionStart ?? val.length;
+    const end   = ta.selectionEnd ?? val.length;
+    const sel   = val.slice(start, end) || 'réponse';
+    const nums  = [...val.matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1], 10));
+    const n     = (nums.length ? Math.max(...nums) : 0) + 1;
+    const ins   = `{{c${n}::${sel}}}`;
+    ta.value = val.slice(0, start) + ins + val.slice(end);
+    ta.focus();
+    const pos = start + ins.length;
+    ta.setSelectionRange(pos, pos);
+  },
+
+  async addCardWithValues(front, back, frontImage, backImage, type = 'basic') {
   if (this.currentIsBaseDeck) return;
   const deck = this.getCurrentDeck();
   if (!deck) return;
@@ -1255,6 +1518,7 @@ const App = {
 
   const newCard = {
     id: cardId,
+    type,
     front,
     back,
     frontImage: uploadedFrontUrl || '',
@@ -1264,7 +1528,8 @@ const App = {
     nextReview: null,
     easeFactor: 2.5,
     interval: 0,
-    repetitions: 0
+    repetitions: 0,
+    updatedAt: Date.now()
   };
 
   deck.cards.push(newCard);
@@ -1279,10 +1544,13 @@ const App = {
     const deck = this.getCurrentDeck();
     if (!deck?.cards[cardIndex]) return;
     const card = deck.cards[cardIndex];
+    const isCloze = Cloze.isCloze(card);
     this._editingCardIndex = cardIndex;
     this._editingCardData  = { frontImage: card.frontImage ?? '', backImage: card.backImage ?? '' };
     const content = `<form id="edit-card-form">
-      <div class="form-group"><label>Recto</label><textarea id="edit-card-front">${escapeHtml(card.front)}</textarea></div>
+      ${isCloze ? `<p style="font-size:12px;color:var(--text-secondary);margin:-4px 0 8px">Texte à trous : <code>{{c1::réponse}}</code> (indice : <code>{{c1::réponse::indice}}</code>).</p>` : ''}
+      <div class="form-group"><label>${isCloze ? 'Texte (avec trous)' : 'Recto'}</label><textarea id="edit-card-front">${escapeHtml(card.front)}</textarea></div>
+      ${isCloze ? `<button type="button" id="edit-cloze-insert-btn" class="btn btn-secondary" style="margin:-4px 0 12px;display:inline-flex">Créer un trou {{c…}}</button>` : ''}
       <div class="form-group">
         <label>Image recto</label>
         <label for="edit-front-img" class="btn-import-image" style="cursor:pointer;display:inline-block;color:white">Choisir un fichier</label>
@@ -1292,7 +1560,7 @@ const App = {
           <button type="button" class="btn-remove-preview" data-side="front">×</button>
         </div>
       </div>
-      <div class="form-group"><label>Verso</label><textarea id="edit-card-back">${escapeHtml(card.back)}</textarea></div>
+      <div class="form-group"><label>${isCloze ? 'Complément (optionnel)' : 'Verso'}</label><textarea id="edit-card-back">${escapeHtml(card.back)}</textarea></div>
       <div class="form-group">
         <label>Image verso</label>
         <label for="edit-back-img" class="btn-import-image" style="cursor:pointer;display:inline-block;color:white">Choisir un fichier</label>
@@ -1311,6 +1579,7 @@ const App = {
     setTimeout(() => {
       document.getElementById('edit-card-cancel')?.addEventListener('click', () => this.hideModal());
       document.getElementById('edit-card-save')?.addEventListener('click', () => this.saveEditCard());
+      document.getElementById('edit-cloze-insert-btn')?.addEventListener('click', () => this._insertCloze(document.getElementById('edit-card-front')));
       document.getElementById('edit-front-img')?.addEventListener('change', e => this.handleEditImageUpload(e.target.files[0], 'front'));
       document.getElementById('edit-back-img')?.addEventListener('change',  e => this.handleEditImageUpload(e.target.files[0], 'back'));
       document.querySelectorAll('#edit-card-form .btn-remove-preview').forEach(btn => btn.addEventListener('click', () => this.removeEditPreview(btn.dataset.side)));
@@ -1326,12 +1595,16 @@ const App = {
   let fi      = this._editingCardData?.frontImage ?? '';
   let bi      = this._editingCardData?.backImage  ?? '';
 
-  if (!front && !fi) { this.showToast('Recto requis.', 'error'); return; }
-  if (!back  && !bi) { this.showToast('Verso requis.', 'error'); return; }
-
   const deck = this.getCurrentDeck();
   if (!deck?.cards[idx]) return;
   const card = deck.cards[idx];
+
+  if (Cloze.isCloze(card)) {
+    if (!Cloze.has(front)) { this.showToast('Ajoutez au moins un trou : {{c1::réponse}}.', 'error'); return; }
+  } else {
+    if (!front && !fi) { this.showToast('Recto requis.', 'error'); return; }
+    if (!back  && !bi) { this.showToast('Verso requis.', 'error'); return; }
+  }
 
   // Upload des nouvelles images si elles ne sont pas déjà des URLs
   try {
@@ -1346,7 +1619,7 @@ const App = {
     return;
   }
 
-  Object.assign(card, { front, back, frontImage: fi, backImage: bi });
+  Object.assign(card, { front, back, frontImage: fi, backImage: bi, updatedAt: Date.now() });
   StorageManager.saveDeck(deck);
   this._editingCardIndex = undefined;
   this._editingCardData = null;
@@ -1366,6 +1639,19 @@ const App = {
       this.renderCards();
       this.showToast('Carte supprimée', 'success');
     }, 'danger');
+  },
+
+  toggleSuspendCard(index) {
+    if (this.currentIsBaseDeck) return;
+    const deck = this.getCurrentDeck();
+    const card = deck?.cards[index];
+    if (!card) return;
+    card.suspended = !card.suspended;
+    if (!card.suspended) { card.isLeech = false; card.lapses = 0; } // réactivation : on remet le compteur de rechutes à zéro
+    card.updatedAt = Date.now();
+    StorageManager.saveDeck(deck);
+    this.renderCards();
+    this.showToast(card.suspended ? 'Carte mise en suspens' : 'Carte réactivée', 'success');
   },
 
   // ---- Images ----
@@ -1456,7 +1742,7 @@ const App = {
         if (!data.name || !Array.isArray(data.cards)) { this.showToast('Format invalide.', 'error'); return; }
         const deck = {
           id: Date.now().toString(), name: data.name,
-          cards: data.cards.map(c => ({ front: c.front ?? '', back: c.back ?? '', frontImage: c.frontImage ?? '', backImage: c.backImage ?? '', cardScore: 0, againCount: 0, easeFactor: 2.5, interval: 1, repetitions: 0, nextReview: null, lastReview: null })),
+          cards: data.cards.map(c => ({ type: c.type === 'cloze' ? 'cloze' : 'basic', front: c.front ?? '', back: c.back ?? '', frontImage: c.frontImage ?? '', backImage: c.backImage ?? '', cardScore: 0, againCount: 0, easeFactor: 2.5, interval: 1, repetitions: 0, nextReview: null, lastReview: null, updatedAt: Date.now() })),
           createdAt: Date.now(), tags: data.tags ?? []
         };
         StorageManager.saveDeck(deck);
@@ -1471,9 +1757,23 @@ const App = {
   // ---- Paramètres révision ----
 
   showReviewSettingsModal() {
+    const deck    = (this.currentDeckId && !this.currentIsBaseDeck) ? this.getCurrentDeck() : null;
+    const opt     = deck?.options ?? {};
+    const newPD   = opt.newPerDay ?? '';
+    const revPD   = opt.reviewsPerDay ?? '';
+    const perDeck = deck ? `
+      <div class="settings-section-label">Limites du deck « ${escapeHtml(deck.name)} »</div>
+      <div class="form-group">
+        <label for="opt-new-per-day">Nouvelles cartes par session</label>
+        <input type="number" id="opt-new-per-day" min="0" max="999" placeholder="défaut (${this.cardsPerSession})" value="${newPD}">
+      </div>
+      <div class="form-group">
+        <label for="opt-rev-per-day">Révisions par session</label>
+        <input type="number" id="opt-rev-per-day" min="0" max="999" placeholder="défaut (${this.cardsPerSession})" value="${revPD}">
+      </div>` : '';
     const content = `<form id="review-settings-form">
       <div class="form-group">
-        <label for="cards-per-session">Cartes par session</label>
+        <label for="cards-per-session">Cartes par session (défaut global)</label>
         <input type="number" id="cards-per-session" min="1" max="100" value="${this.cardsPerSession}" required>
       </div>
       <div class="form-group">
@@ -1482,6 +1782,7 @@ const App = {
           <span class="checkbox-custom"></span><span>Mode révision inversé</span>
         </label>
       </div>
+      ${perDeck}
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" id="rs-cancel">Annuler</button>
         <button type="submit" class="btn btn-primary">Enregistrer</button>
@@ -1494,11 +1795,24 @@ const App = {
         e.preventDefault();
         const n = parseInt(document.getElementById('cards-per-session').value);
         const r = document.getElementById('reversed-mode').checked;
-        if (n > 0 && n <= 100) {
-          this.cardsPerSession = n; localStorage.setItem('flashcards_cardsPerSession', n.toString());
-          this.isReversedMode = r; localStorage.setItem('flashcards_reversedMode', r.toString());
-          this.hideModal(); this.showToast('Paramètres sauvegardés', 'success');
-        } else { this.showToast('Valeur entre 1 et 100.', 'error'); }
+        if (!(n > 0 && n <= 100)) { this.showToast('Valeur entre 1 et 100.', 'error'); return; }
+        this.cardsPerSession = n; localStorage.setItem('flashcards_cardsPerSession', n.toString());
+        this.isReversedMode = r; localStorage.setItem('flashcards_reversedMode', r.toString());
+        // Options par deck (vide = défaut global)
+        if (deck) {
+          const parseLimit = v => { const x = parseInt(v, 10); return Number.isFinite(x) && x >= 0 ? x : null; };
+          const nv = parseLimit(document.getElementById('opt-new-per-day')?.value);
+          const rv = parseLimit(document.getElementById('opt-rev-per-day')?.value);
+          const options = {};
+          if (nv !== null) options.newPerDay = nv;
+          if (rv !== null) options.reviewsPerDay = rv;
+          const fresh = this.getCurrentDeck();
+          if (fresh) {
+            if (Object.keys(options).length) fresh.options = options; else delete fresh.options;
+            StorageManager.saveDeck(fresh);
+          }
+        }
+        this.hideModal(); this.showToast('Paramètres sauvegardés', 'success');
       });
     });
   },
@@ -1522,6 +1836,65 @@ const App = {
     const avgScore  = total ? Math.round(totalScore / total) : 0;
     const circleColor = mastery >= 80 ? '#4CAF50' : mastery >= 60 ? '#8BC34A' : mastery >= 40 ? '#FFC107' : mastery >= 20 ? '#FF9800' : '#F44336';
     const pct = n => total ? (n / total * 100) : 0;
+
+    // ---- Statistiques détaillées (façon Anki) ----
+    const DAY = 86_400_000;
+    let nw = 0, learn = 0, young = 0, mature = 0, susp = 0, easeSum = 0, easeN = 0, lapses = 0, leeches = 0, reps = 0;
+    const forecast = new Array(14).fill(0);
+    deck.cards.forEach(c => {
+      reps   += c.repetitions ?? 0;
+      lapses += c.lapses ?? 0;
+      if (c.isLeech || (c.lapses ?? 0) >= 8) leeches++;
+      if ((c.repetitions ?? 0) > 0) { easeSum += c.easeFactor ?? 2.5; easeN++; }
+      if (c.suspended) { susp++; return; }
+      const st = c.state ?? ((c.repetitions ?? 0) > 0 ? 'review' : 'new');
+      if (st === 'new') nw++;
+      else if (st === 'learning') learn++;
+      else if ((c.interval ?? 0) >= 21) mature++;
+      else young++;
+      if (c.nextReview && c.nextReview > now) {
+        const d = Math.floor((c.nextReview - now) / DAY);
+        if (d < 14) forecast[d]++;
+      }
+    });
+    const avgEase  = easeN ? (easeSum / easeN).toFixed(2) : '—';
+    const ret      = this._retentionStats(30);
+    const fcMax    = Math.max(1, ...forecast);
+    const fcTotal  = forecast.reduce((s, v) => s + v, 0);
+    const matSegs  = [
+      { l: 'Nouvelles',      v: nw,     c: '#3b82f6' },
+      { l: 'Apprentissage',  v: learn,  c: '#f59e0b' },
+      { l: 'Jeunes (<21 j)', v: young,  c: '#0ea5e9' },
+      { l: 'Mûres (≥21 j)',  v: mature, c: '#22c55e' },
+      { l: 'En suspens',     v: susp,   c: '#94a3b8' }
+    ];
+    const matTotal = total || 1;
+
+    const forecastHtml = `<div class="stats-section">
+      <h4>Prévision des révisions — 14 jours</h4>
+      <div class="forecast-chart">
+        ${forecast.map((v, i) => `<div class="forecast-col" title="Dans ${i + 1} j : ${v} carte${v !== 1 ? 's' : ''}"><div class="forecast-bar" style="height:${Math.round(v / fcMax * 100)}%"></div><span class="forecast-x">${i + 1}</span></div>`).join('')}
+      </div>
+      <div class="forecast-caption">${due} en retard · ${fcTotal} prévue${fcTotal !== 1 ? 's' : ''} sur 14 j</div>
+    </div>`;
+
+    const maturityHtml = `<div class="stats-section">
+      <h4>Maturité des cartes</h4>
+      <div class="distribution-bar">${matSegs.filter(s => s.v > 0).map(s => `<div class="bar-segment" style="width:${s.v / matTotal * 100}%;background:${s.c}" title="${s.l}: ${s.v}"></div>`).join('')}</div>
+      <div class="distribution-legend">${matSegs.map(s => `<div class="legend-item"><span class="legend-dot" style="background:${s.c}"></span><span class="legend-label">${s.l}</span><span class="legend-value">${s.v}</span></div>`).join('')}</div>
+    </div>`;
+
+    const detailsHtml = `<div class="stats-section">
+      <h4>Détails</h4>
+      <div class="stats-detail-grid">
+        <div class="stats-detail-cell"><span class="sd-val">${ret.retention !== null ? ret.retention + '%' : '—'}</span><span class="sd-lbl">Rétention 30 j</span></div>
+        <div class="stats-detail-cell"><span class="sd-val">${avgEase}</span><span class="sd-lbl">Facilité moy.</span></div>
+        <div class="stats-detail-cell"><span class="sd-val">${reps}</span><span class="sd-lbl">Révisions</span></div>
+        <div class="stats-detail-cell"><span class="sd-val">${lapses}</span><span class="sd-lbl">Rechutes</span></div>
+        <div class="stats-detail-cell"><span class="sd-val">${leeches}</span><span class="sd-lbl">Leeches</span></div>
+      </div>
+      ${ret.reviews === 0 ? `<p class="sd-note">La rétention se calcule au fil de tes révisions.</p>` : ''}
+    </div>`;
     const content = `<div class="stats-container">
       <div class="stats-mastery"><div class="mastery-circle-container">
         <svg class="mastery-svg" viewBox="0 0 100 100"><circle class="mastery-bg" cx="50" cy="50" r="45"/><circle class="mastery-progress" cx="50" cy="50" r="45" stroke="${circleColor}" stroke-dasharray="${mastery * 2.83} 283" stroke-dashoffset="0"/></svg>
@@ -1550,6 +1923,9 @@ const App = {
         <div class="score-avg-bar"><div class="score-avg-fill animate-bar" style="--target-width:${Math.min(avgScore, 50) * 2}%"></div></div>
         <div class="score-avg-value">${avgScore} pts</div>
       </div>
+      ${forecastHtml}
+      ${maturityHtml}
+      ${detailsHtml}
     </div>`;
     this.showModalWithContent('Statistiques', content);
     setTimeout(() => this.animateStatsModal(mastery), 100);
@@ -1692,18 +2068,25 @@ const App = {
     const fc   = document.getElementById('tags-filter-container');
     const hasTags = tags.length > 0;
     if (fc) fc.style.display = hasTags ? 'block' : 'none';
-    // Réserve l'espace sous la barre de tags (fixed) pour ne pas chevaucher la grille
     document.getElementById('my-decks-container')?.classList.toggle('has-tags-filter', hasTags);
-    if (!hasTags) return;
+    if (!hasTags) { this.currentTagFilter = 'all'; return; }
+    // Si le tag sélectionné n'existe plus (deck supprimé/modifié), revenir à "Tous"
+    if (this.currentTagFilter !== 'all' && !tags.includes(this.currentTagFilter)) this.currentTagFilter = 'all';
+    // Dropdown compact (au lieu d'un bandeau de puces qui déborde quand il y a beaucoup de tags)
     container.innerHTML = `
-      <button class="tag-filter-btn ${this.currentTagFilter === 'all' ? 'active' : ''}" data-tag="all">Tous</button>
-      ${tags.map(t => `<button class="tag-filter-btn ${this.currentTagFilter === t ? 'active' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}`;
-    container.querySelectorAll('.tag-filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.currentTagFilter = btn.dataset.tag;
-        container.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active'); this.renderDecks();
-      });
+      <div class="tag-filter-dropdown">
+        <span class="tag-filter-icon">${Icons.getIcon('layers', 15, 'currentColor')}</span>
+        <div class="custom-select-wrapper">
+          <select id="tag-filter-select" class="custom-select" aria-label="Filtrer par tag">
+            <option value="all"${this.currentTagFilter === 'all' ? ' selected' : ''}>Tous les tags</option>
+            ${tags.map(t => `<option value="${escapeHtml(t)}"${this.currentTagFilter === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}
+          </select>
+          <div class="custom-select-arrow">${Icons.getIcon('arrowDown', 12)}</div>
+        </div>
+      </div>`;
+    document.getElementById('tag-filter-select')?.addEventListener('change', e => {
+      this.currentTagFilter = e.target.value;
+      this.renderDecks();
     });
   },
 
@@ -1722,14 +2105,33 @@ const App = {
 
     if (searchIcon) searchIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
 
+    const chips = [...document.querySelectorAll('.card-filter-chip')];
+    const syncChips = () => {
+      const q = (this.currentSearchQuery || '').trim();
+      chips.forEach(c => c.classList.toggle('active', (c.dataset.filter || '') === q));
+      // Si aucune puce ne correspond et que la requête est vide, activer « Toutes »
+      if (!q) chips.find(c => !c.dataset.filter)?.classList.add('active');
+    };
+
     const debouncedSearch = debounce(value => {
       this.currentSearchQuery = value.toLowerCase();
       clearBtn?.classList.toggle('hidden', !this.currentSearchQuery);
+      syncChips();
       this.renderCards();
     }, 200);
 
     searchInput?.addEventListener('input', e => debouncedSearch(e.target.value));
-    clearBtn?.addEventListener('click', () => { if (searchInput) { searchInput.value = ''; this.currentSearchQuery = ''; clearBtn.classList.add('hidden'); this.renderCards(); } });
+    clearBtn?.addEventListener('click', () => { if (searchInput) { searchInput.value = ''; this.currentSearchQuery = ''; clearBtn.classList.add('hidden'); syncChips(); this.renderCards(); } });
+
+    chips.forEach(chip => chip.addEventListener('click', () => {
+      const f = chip.dataset.filter || '';
+      this.currentSearchQuery = f;
+      if (searchInput) searchInput.value = f;
+      clearBtn?.classList.toggle('hidden', !f);
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      this.renderCards();
+    }));
 
     if (sortSelect) {
       if (this.currentSortOption) sortSelect.value = this.currentSortOption;
@@ -1737,10 +2139,30 @@ const App = {
     }
   },
 
+  // Filtres type Anki : is:due, is:new, is:learning, is:suspended, is:leech, is:cloze
+  _cardMatchesFilter(card, filter) {
+    const now = Date.now();
+    switch (filter) {
+      case 'due':       return (!card.suspended) && (!card.nextReview || card.nextReview <= now);
+      case 'new':       return card.state ? card.state === 'new' : ((card.repetitions ?? 0) === 0 && !card.lastReview);
+      case 'learning':  return card.state === 'learning';
+      case 'suspended': return !!card.suspended;
+      case 'leech':     return !!card.isLeech || (card.lapses ?? 0) >= 8;
+      case 'cloze':     return card.type === 'cloze';
+      default:          return true;
+    }
+  },
+
   filterAndSortCards(cards) {
     let list = [...cards];
-    if (this.currentSearchQuery) {
-      list = list.filter(c => (c.front ?? '').toLowerCase().includes(this.currentSearchQuery) || (c.back ?? '').toLowerCase().includes(this.currentSearchQuery));
+    // La requête peut contenir des jetons `is:xxx` + du texte libre
+    const raw     = (this.currentSearchQuery || '').trim();
+    const tokens  = raw.split(/\s+/).filter(Boolean);
+    const filters = tokens.filter(t => t.startsWith('is:')).map(t => t.slice(3));
+    const text    = tokens.filter(t => !t.startsWith('is:')).join(' ').toLowerCase();
+    for (const f of filters) list = list.filter(c => this._cardMatchesFilter(c, f));
+    if (text) {
+      list = list.filter(c => (c.front ?? '').toLowerCase().includes(text) || (c.back ?? '').toLowerCase().includes(text));
     }
     switch (this.currentSortOption) {
       case 'score-asc':   list.sort((a, b) => (a.cardScore ?? 0) - (b.cardScore ?? 0)); break;
@@ -1797,20 +2219,59 @@ const App = {
 
   showHelpModal() {
     const pages = [
-      { title: "Qu'est-ce qu'une flashcard ?",
-        content: `<p><strong>ShardCards</strong> utilise la <strong>répétition espacée</strong> (algorithme SM-2) pour mémoriser efficacement.</p><p style="margin-top:10px"><strong>Flashcard :</strong> carte avec recto (question) et verso (réponse).</p><p style="margin-top:10px">Les cartes difficiles reviennent plus souvent, les faciles moins souvent. Résultat : mémorisation optimale en moins de temps.</p>` },
-      { title: 'Démarrer avec ShardCards',
-        content: `<p><strong>Créer un deck :</strong> bouton <strong>+</strong> en bas à droite.</p><p style="margin-top:10px"><strong>Ajouter des cartes :</strong> ouvrez un deck, puis cliquez sur <strong>+</strong>.</p><p style="margin-top:10px"><strong>Actions rapides :</strong> appui long sur un deck pour réviser ou supprimer.</p>` },
-      { title: 'Réviser',
-        content: `<p><strong>Lancer une révision :</strong> appui long → Réviser, ou menu hamburger.</p><p style="margin-top:10px"><strong>Couleurs de difficulté :</strong></p><ul style="margin-top:8px;padding-left:20px;font-size:14px"><li><span style="color:#F44336">● Rouge</span> — Très difficile</li><li><span style="color:#FF9800">● Orange</span> — Difficile</li><li><span style="color:#FFC107">● Jaune</span> — Moyen</li><li><span style="color:#4CAF50">● Vert</span> — Facile</li></ul>` },
-      { title: 'Fonctionnalités avancées',
-        content: `<p><strong>Synchronisation cloud :</strong> connectez-vous (menu hamburger) pour sauvegarder vos decks en ligne et les retrouver sur tous vos appareils.</p><p style="margin-top:10px"><strong>Mode sombre :</strong> menu hamburger → icône lune.</p><p style="margin-top:10px"><strong>Import/Export JSON :</strong> partagez vos decks ou faites des sauvegardes.</p>` }
+      {
+        icon: 'zap', tint: 'tint-blue', title: 'Répétition espacée',
+        items: [
+          { icon: 'card',    t: 'Flashcard',          d: 'Recto = question, verso = réponse.' },
+          { icon: 'refresh', t: 'Algorithme adaptatif', d: 'Tu notes chaque carte ; l\'app calcule la date idéale pour la revoir.' },
+          { icon: 'target',  t: 'Moins d\'efforts',    d: 'Cartes difficiles plus souvent, faciles plus rarement.' }
+        ]
+      },
+      {
+        icon: 'rocket', tint: 'tint-sky', title: 'Démarrer',
+        items: [
+          { icon: 'plus', t: 'Créer un deck',      d: 'Bouton + en bas à droite.' },
+          { icon: 'card', t: 'Ajouter des cartes', d: 'Ouvre un deck puis +. Type basique ou texte à trous.' },
+          { icon: 'menu', t: 'Actions rapides',    d: 'Appui long sur un deck : réviser ou supprimer.' }
+        ]
+      },
+      {
+        icon: 'refresh', tint: 'tint-green', title: 'Réviser',
+        items: [
+          { icon: 'layers', t: '4 niveaux',  d: 'Encore · Difficile · Bien · Facile règlent le prochain intervalle.' },
+          { icon: 'volume', t: 'Audio & annulation', d: 'Bouton haut-parleur pour la lecture ; touche Z (ou ↩) pour annuler une note.' }
+        ],
+        extra: `<div class="help-legend">
+          <div class="help-legend-row"><span class="color-dot" style="background:#F44336"></span>Très difficile</div>
+          <div class="help-legend-row"><span class="color-dot" style="background:#FF9800"></span>Difficile</div>
+          <div class="help-legend-row"><span class="color-dot" style="background:#FFC107"></span>Moyen</div>
+          <div class="help-legend-row"><span class="color-dot" style="background:#4CAF50"></span>Facile</div>
+        </div>`
+      },
+      {
+        icon: 'award', tint: 'tint-blue', title: 'Pour aller plus loin',
+        items: [
+          { icon: 'zap',      t: 'Formules LaTeX', d: '$…$ en ligne, $$…$$ pour une formule centrée.' },
+          { icon: 'cloud',    t: 'Sync cloud',     d: 'Connecte-toi pour retrouver tes decks sur tous tes appareils.' },
+          { icon: 'moon',     t: 'Mode sombre',    d: 'Menu → icône lune.' },
+          { icon: 'download', t: 'Import / Export', d: 'Sauvegarde et partage tes decks en JSON.' }
+        ]
+      }
     ];
     const content = `<div class="help-modal-container">
       <div class="help-pages-wrapper">
         ${pages.map((p, i) => `<div class="help-page ${i === 0 ? 'active' : ''}">
-          <h3 class="help-page-title">${Icons.getIcon('help', 24, 'var(--primary-color)')} ${p.title}</h3>
-          <div class="help-page-content">${p.content}</div>
+          <div class="help-page-head">
+            <span class="help-page-icon ${p.tint}">${Icons.getIcon(p.icon, 22)}</span>
+            <h3 class="help-page-title">${p.title}</h3>
+          </div>
+          <div class="help-page-content">
+            ${p.items.map(it => `<div class="help-item">
+              <span class="help-item-icon">${Icons.getIcon(it.icon, 18, 'currentColor')}</span>
+              <div class="help-item-text"><strong>${it.t}</strong><span>${it.d}</span></div>
+            </div>`).join('')}
+            ${p.extra ?? ''}
+          </div>
         </div>`).join('')}
       </div>
       <div class="help-navigation">
@@ -1893,11 +2354,21 @@ const App = {
 
   isMobile() { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); },
 
+  // ---- Rendu LaTeX (MathJax) ----
+  // Typeset le contenu math d'un élément. No-op si MathJax pas encore chargé.
+  renderMath(el) {
+    if (!el) return;
+    const mj = window.MathJax;
+    if (!mj?.typesetPromise) return;
+    try { mj.typesetClear?.([el]); } catch { /* ignore */ }
+    mj.typesetPromise([el]).catch(() => { /* ignore erreurs de syntaxe LaTeX */ });
+  },
+
   // ============================================================
   // FLASH FEEDBACK (after rating)
   // ============================================================
-  _flashReviewFeedback(quality) {
-    const cls = quality === 0 ? 'again-flash' : quality === 1 ? 'good-flash' : 'easy-flash';
+  _flashReviewFeedback(grade) {
+    const cls = grade === 0 ? 'again-flash' : grade === 1 ? 'hard-flash' : grade === 2 ? 'good-flash' : 'easy-flash';
     const el  = document.createElement('div');
     el.className = `review-flash ${cls}`;
     document.body.appendChild(el);
@@ -1972,6 +2443,33 @@ const App = {
   },
 
   _getStreak() { return parseInt(localStorage.getItem('flashcards_streak') || '0'); },
+
+  // Journal des notes (pour la rétention). Construit avec le temps (pas rétroactif).
+  _logReview(grade) {
+    const today = this._dateKey();
+    const log   = JSON.parse(localStorage.getItem('flashcards_review_log') || '{}');
+    const day   = log[today] || { again: 0, hard: 0, good: 0, easy: 0 };
+    const key   = ['again', 'hard', 'good', 'easy'][grade] ?? 'good';
+    day[key]    = (day[key] || 0) + 1;
+    log[today]  = day;
+    const keys = Object.keys(log).sort();
+    while (keys.length > 120) delete log[keys.shift()];  // garde ~120 jours
+    localStorage.setItem('flashcards_review_log', JSON.stringify(log));
+  },
+
+  // Rétention = % de révisions réussies (≠ Encore) sur les N derniers jours.
+  _retentionStats(days = 30) {
+    const log   = JSON.parse(localStorage.getItem('flashcards_review_log') || '{}');
+    const since = this._lastNDayKeys(days);
+    let again = 0, ok = 0;
+    for (const k of since) {
+      const d = log[k]; if (!d) continue;
+      again += d.again || 0;
+      ok    += (d.hard || 0) + (d.good || 0) + (d.easy || 0);
+    }
+    const tot = again + ok;
+    return { reviews: tot, retention: tot ? Math.round((ok / tot) * 100) : null };
+  },
 
   // ============================================================
   // ONBOARDING
@@ -2258,9 +2756,12 @@ const App = {
   // ============================================================
   showQuizSetupModal() {
     if (!this.currentDeckId) return;
-    const deck = this.getCurrentDeck();
-    if (!deck || deck.cards.length < 4) {
-      this.showToast('Il faut au moins 4 cartes pour le mode examen.', 'error'); return;
+    const fullDeck = this.getCurrentDeck();
+    // Le mode examen (QCM / Vrai-Faux) ne gère que les cartes recto/verso, pas les cloze.
+    const quizCards = (fullDeck?.cards ?? []).filter(c => !Cloze.isCloze(c));
+    const deck = fullDeck ? { ...fullDeck, cards: quizCards } : null;
+    if (!deck || quizCards.length < 4) {
+      this.showToast('Il faut au moins 4 cartes recto/verso pour le mode examen.', 'error'); return;
     }
     const content = `<form id="quiz-setup-form">
       <div class="form-group">
@@ -2412,6 +2913,8 @@ const App = {
         });
       });
     }
+
+    this.renderMath(content);
 
     // Timer
     if (timer > 0) {

@@ -1,10 +1,11 @@
-const CACHE_NAME = 'flashcards-v3';
+const CACHE_NAME = 'flashcards-v4';
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './script.js',
-  './manifest.json'
+  './manifest.json',
+  './vendor/tex-svg.js'
 ];
 
 self.addEventListener('install', (event) => {

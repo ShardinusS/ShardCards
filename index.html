@@ -19,6 +19,23 @@
     <link rel="apple-touch-icon" href="icon-1024.png">
     <link rel="apple-touch-icon" sizes="1024x1024" href="icon-1024.png">
     <link rel="icon" type="image/png" sizes="1024x1024" href="icon-1024.png">
+
+    <!-- MathJax (rendu LaTeX, vendored pour offline, sortie SVG sans police externe) -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']]
+        },
+        svg: { fontCache: 'global' },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoreHtmlClass: 'no-math'
+        },
+        startup: { typeset: false }
+      };
+    </script>
+    <script defer src="vendor/tex-svg.js"></script>
 </head>
 <body>
 
@@ -185,20 +202,30 @@
 
         <!-- Search & sort toolbar -->
         <div class="cards-toolbar">
-            <div class="search-container">
-                <span class="search-icon icon-svg"></span>
-                <input type="text" id="cards-search" placeholder="Rechercher une carte..." autocomplete="off">
-                <button id="clear-search" class="clear-search-btn hidden" aria-label="Effacer">&times;</button>
+            <div class="cards-toolbar-row">
+                <div class="search-container">
+                    <span class="search-icon icon-svg"></span>
+                    <input type="text" id="cards-search" placeholder="Rechercher… (ex : is:due, is:new)" autocomplete="off">
+                    <button id="clear-search" class="clear-search-btn hidden" aria-label="Effacer">&times;</button>
+                </div>
+                <div class="sort-container">
+                    <select id="cards-sort" aria-label="Trier par">
+                        <option value="default">Défaut</option>
+                        <option value="score-asc">Difficulté ↑</option>
+                        <option value="score-desc">Difficulté ↓</option>
+                        <option value="alpha-asc">A → Z</option>
+                        <option value="alpha-desc">Z → A</option>
+                        <option value="review">Révision</option>
+                    </select>
+                </div>
             </div>
-            <div class="sort-container">
-                <select id="cards-sort" aria-label="Trier par">
-                    <option value="default">Défaut</option>
-                    <option value="score-asc">Difficulté ↑</option>
-                    <option value="score-desc">Difficulté ↓</option>
-                    <option value="alpha-asc">A → Z</option>
-                    <option value="alpha-desc">Z → A</option>
-                    <option value="review">Révision</option>
-                </select>
+            <!-- Filtres rapides (syntaxe is:…) -->
+            <div class="cards-filters" id="cards-filters">
+                <button class="card-filter-chip active" data-filter="">Toutes</button>
+                <button class="card-filter-chip" data-filter="is:due">À réviser</button>
+                <button class="card-filter-chip" data-filter="is:new">Nouvelles</button>
+                <button class="card-filter-chip" data-filter="is:suspended">En suspens</button>
+                <button class="card-filter-chip" data-filter="is:cloze">Trous</button>
             </div>
         </div>
 
@@ -218,7 +245,11 @@
                 <span class="icon-svg icon-arrow-left"></span>
             </button>
             <h1>Révision</h1>
-            <div id="review-progress">0 / 0</div>
+            <div class="header-actions">
+                <button id="review-undo-btn" class="icon-btn" aria-label="Annuler" title="Annuler la dernière note"></button>
+                <button id="review-tts-btn" class="icon-btn" aria-label="Lire à voix haute" title="Lecture audio"></button>
+                <div id="review-progress">0 / 0</div>
+            </div>
         </header>
 
         <div id="review-card" class="review-card">
@@ -238,6 +269,7 @@
 
         <div id="review-buttons" class="review-buttons hidden">
             <button id="again-btn" class="review-btn again">Encore</button>
+            <button id="hard-btn" class="review-btn hard">Difficile</button>
             <button id="good-btn" class="review-btn good">Bien</button>
             <button id="easy-btn" class="review-btn easy">Facile</button>
         </div>
