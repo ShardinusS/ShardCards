@@ -1,0 +1,54 @@
+{
+  "name": "Grand Oral — Orientation, E-Bench & méthode",
+  "tags": [
+    "Grand Oral",
+    "STI2D SIN"
+  ],
+  "cards": [
+    {
+      "front": "Lien sujet → avenir (réponse prête)",
+      "back": "À la rentrée j'intègre la Licence Informatique de l'UPJV à Amiens (déjà accepté). Objectif : travailler dans l'intelligence artificielle. Ce sujet m'a poussé à comprendre comment une IA perçoit son environnement et décide. E-Bench m'a initié à la chaîne capteur–traitement ; la licence me fera passer à l'IA elle-même (apprentissage automatique, réseaux de neurones)."
+    },
+    {
+      "front": "Pourquoi avoir choisi ce sujet ?",
+      "back": "Lien direct avec mon avenir : je veux travailler dans l'IA. Comprendre comment une IA perçoit et décide (véhicule) m'a attiré. Réponse honnête et personnelle."
+    },
+    {
+      "front": "Quel métier / études après le bac ?",
+      "back": "J'intègre la Licence Informatique de l'UPJV à Amiens (déjà accepté). Objectif : travailler dans le domaine de l'intelligence artificielle."
+    },
+    {
+      "front": "Pourquoi l'IA précisément ?",
+      "back": "Sur E-Bench j'ai vu la chaîne capteur → traitement. Je veux passer à l'étape supérieure : le système qui apprend et décide. La licence m'ouvre l'apprentissage automatique et les réseaux de neurones."
+    },
+    {
+      "front": "En quoi STI2D SIN t'a préparé ?",
+      "back": "Acquisition et traitement de l'information, programmation, capteurs — ce que j'ai pratiqué sur E-Bench, et la base de l'informatique que je vais étudier."
+    },
+    {
+      "front": "Ce sujet a-t-il changé ton projet ?",
+      "back": "Il l'a confirmé et précisé : il m'a fait mesurer les limites réelles de l'IA (fiabilité, edge cases), un enjeu que je veux comprendre en profondeur dans mes études."
+    },
+    {
+      "front": "E-Bench, c'est quoi ?",
+      "back": "Banc solaire autonome intelligent : Raspberry Pi + capteur PIR + écran tactile + base SQLite locale. 3e aux Olympiades SI 2024-25. Mon rôle : site web, code, tests capteurs."
+    },
+    {
+      "front": "La chaîne d'information (SIN)",
+      "back": "Capteur (PIR détecte une présence) → Traitement (la Raspberry Pi traite l'info) → Action (déclenche). C'est le cœur de la spécialité SIN : acquisition et traitement de l'information.",
+      "backImage": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MjAgMzEwIiB3aWR0aD0iNjIwIiBoZWlnaHQ9IjMxMCI+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYyMCIgaGVpZ2h0PSIzMTAiIHJ4PSIyMCIgZmlsbD0iI2Y1ZjhmZCIvPgogIDxkZWZzPjxtYXJrZXIgaWQ9ImFoIiBtYXJrZXJXaWR0aD0iOSIgbWFya2VySGVpZ2h0PSI5IiByZWZYPSI3IiByZWZZPSI0LjUiIG9yaWVudD0iYXV0byI+PHBhdGggZD0iTTAsMCBMOSw0LjUgTDAsOSB6IiBmaWxsPSIjMDA3MWUzIi8+PC9tYXJrZXI+PC9kZWZzPjx0ZXh0IHg9IjMxMCIgeT0iNDAiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLCdTZWdvZSBVSScsSW50ZXIsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyMCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iIzFkMWQxZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q2hhw65uZSBkJ2luZm9ybWF0aW9uIChTSU4pPC90ZXh0PjxyZWN0IHg9IjMwIiB5PSIxMDAiIHdpZHRoPSIxNTAiIGhlaWdodD0iODUiIHJ4PSIxMiIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjNWFjOGZhIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjEwNSIgeT0iMTM2IiBmb250LWZhbWlseT0iLWFwcGxlLXN5c3RlbSwnU2Vnb2UgVUknLEludGVyLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZvbnQtd2VpZ2h0PSI3MDAiIGZpbGw9IiM1YWM4ZmEiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhcHRldXI8L3RleHQ+PHRleHQgeD0iMTA1IiB5PSIxNjAiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLCdTZWdvZSBVSScsSW50ZXIsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjUwMCIgZmlsbD0iIzZlNmU3MyIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UElSIGTDqXRlY3RlPC90ZXh0PjxsaW5lIHgxPSIxODAiIHkxPSIxNDIuNSIgeDI9IjIzNSIgeTI9IjE0Mi41IiBzdHJva2U9IiMwMDcxZTMiIHN0cm9rZS13aWR0aD0iMi41IiBtYXJrZXItZW5kPSJ1cmwoI2FoKSIvPjxyZWN0IHg9IjIzNSIgeT0iMTAwIiB3aWR0aD0iMTUwIiBoZWlnaHQ9Ijg1IiByeD0iMTIiIGZpbGw9IiNmZmYiIHN0cm9rZT0iIzAwNzFlMyIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSIzMTAiIHk9IjEzNiIgZm9udC1mYW1pbHk9Ii1hcHBsZS1zeXN0ZW0sJ1NlZ29lIFVJJyxJbnRlcixBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjMDA3MWUzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5UcmFpdGVtZW50PC90ZXh0Pjx0ZXh0IHg9IjMxMCIgeT0iMTYwIiBmb250LWZhbWlseT0iLWFwcGxlLXN5c3RlbSwnU2Vnb2UgVUknLEludGVyLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiIGZvbnQtd2VpZ2h0PSI1MDAiIGZpbGw9IiM2ZTZlNzMiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlJhc3BiZXJyeSBQaTwvdGV4dD48bGluZSB4MT0iMzg1IiB5MT0iMTQyLjUiIHgyPSI0NDAiIHkyPSIxNDIuNSIgc3Ryb2tlPSIjMDA3MWUzIiBzdHJva2Utd2lkdGg9IjIuNSIgbWFya2VyLWVuZD0idXJsKCNhaCkiLz48cmVjdCB4PSI0NDAiIHk9IjEwMCIgd2lkdGg9IjE1MCIgaGVpZ2h0PSI4NSIgcng9IjEyIiBmaWxsPSIjZmZmIiBzdHJva2U9IiMzNGM3NTkiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTE1IiB5PSIxMzYiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLCdTZWdvZSBVSScsSW50ZXIsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iIzM0Yzc1OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QWN0aW9uPC90ZXh0Pjx0ZXh0IHg9IjUxNSIgeT0iMTYwIiBmb250LWZhbWlseT0iLWFwcGxlLXN5c3RlbSwnU2Vnb2UgVUknLEludGVyLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiIGZvbnQtd2VpZ2h0PSI1MDAiIGZpbGw9IiM2ZTZlNzMiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmTDqWNsZW5jaGU8L3RleHQ+PHRleHQgeD0iMzEwIiB5PSIyNTUiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLCdTZWdvZSBVSScsSW50ZXIsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzFkMWQxZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RS1CZW5jaCA6IHN0b2NrYWdlIGxvY2FsIFNRTGl0ZSwgYXVjdW4gY2xvdWQ8L3RleHQ+PHRleHQgeD0iMzEwIiB5PSIyODAiIGZvbnQtZmFtaWx5PSItYXBwbGUtc3lzdGVtLCdTZWdvZSBVSScsSW50ZXIsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxMyIgZm9udC13ZWlnaHQ9IjUwMCIgZmlsbD0iIzZlNmU3MyIgdGV4dC1hbmNob3I9Im1pZGRsZSI+4oaSIG1pbmltaXNhdGlvbiArIHByaXZhY3kgYnkgZGVzaWduIChSR1BEKTwvdGV4dD4KPC9zdmc+"
+    },
+    {
+      "front": "Les 20 min de préparation",
+      "back": "0-2 min : accroche + problématique + annonce de plan. 2-10 min : squelette (titres I/II, 3 sous-points en mots-clés). 10-14 min : exemples + chiffres soulignés (38 %, Jeep 2015, RGPD 2018). 14-17 min : rédiger intro + conclusion en entier. 17-20 min : relire à voix basse, noter 2 transitions, respirer."
+    },
+    {
+      "front": "Maîtriser l'échange (la clé du 20)",
+      "back": "1. Reformule : « Si je comprends, vous me demandez si… ». 2. Réponds en structure : « deux choses : d'abord… ensuite… ». 3. Un exemple concret : E-Bench ou France Travail. 4. Si tu ne sais pas : « Je ne suis pas certain, mais je raisonnerais ainsi… » → honnêteté + raisonnement > bluff."
+    },
+    {
+      "front": "Les 4 réflexes qui font 17 → 20",
+      "back": "Parler sans lire (regards vers les deux examinateurs). Conviction : pause après chaque chiffre (« 40 millions… » puis silence). Tenir 9:30–10:00 pile, fin nette. Posture : debout, droit, mains visibles, une respiration entre chaque partie."
+    }
+  ]
+}
